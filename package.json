@@ -1,13 +1,16 @@
 {
-	"name": "school-embed-site",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev"
-	},
-	"devDependencies": {
-		"wrangler": "^4.60.0"
-	}
+  "name": "school-embed-site",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "start": "npx wrangler dev",
+
+    "build:web": "cd web && npm run build",
+
+    "deploy": "npm run build:web && npx wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.60.0"
+  }
 }

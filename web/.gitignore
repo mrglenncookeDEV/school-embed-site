@@ -1,0 +1,25 @@
+cat > .gitignore << 'EOF'
+# dependencies
+node_modules/
+
+# build output (React build goes here in this project)
+public/
+dist/
+
+# env files
+.env
+.env.*
+*.local
+
+# Cloudflare Wrangler
+.wrangler/
+wrangler.toml.bak
+
+# OS
+.DS_Store
+
+# editor (keep settings if you want)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+EOF
