@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  text TEXT NOT NULL
+);
+
+INSERT INTO messages (text)
+SELECT 'Hello from D1 🎉'
+WHERE NOT EXISTS (
+  SELECT 1 FROM messages
+);
