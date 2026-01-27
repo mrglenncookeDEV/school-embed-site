@@ -1,3 +1,5 @@
+import { getCanonicalHouses } from "./config/houses.js";
+
 // Durable Object required by your project config
 export class MyDurableObject {
   constructor(state, env) {
@@ -88,10 +90,7 @@ async function ensureCurrentWeek(db) {
 
 
 async function fetchHouses(db) {
-  const { results } = await db
-    .prepare("SELECT id, name, color FROM houses ORDER BY name ASC")
-    .all();
-  return results;
+  return getCanonicalHouses();
 }
 
 async function fetchClasses(db) {
@@ -151,6 +150,43 @@ async function fetchScoreboard(db, weekId) {
     })),
     lastUpdated: (lastUpdatedResults[0] && lastUpdatedResults[0].lastUpdated) || null,
   };
+}
+
+async function fetchActiveTerm(db) {
+  try {
+    const { results } = await db.prepare(`SELECT * FROM terms WHERE is_active = 1 LIMIT 1`).all();
+    return results[0] || null;
+  } catch (error) {
+    if (error.message && error.message.includes("no such table")) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function fetchTermScoreboard(db, term) {
+  const { results } = await db
+    .prepare(
+      `SELECT
+        h.id AS house_id,
+        h.name,
+        h.color,
+        COALESCE(SUM(pe.points), 0) AS points
+      FROM houses h
+      LEFT JOIN point_entries pe ON pe.house_id = h.id
+      LEFT JOIN weeks w ON w.id = pe.week_id AND w.week_start BETWEEN ? AND ?
+      GROUP BY h.id
+      ORDER BY h.name ASC`
+    )
+    .bind(term.start_date, term.end_date)
+    .all();
+
+  return results.map((row) => ({
+    houseId: row.house_id,
+    name: row.name,
+    color: row.color,
+    points: Number(row.points ?? 0),
+  }));
 }
 
 async function fetchMissingClasses(db, weekId) {
@@ -404,7 +440,32 @@ async function handleApi(request, env, url) {
   if (pathname === "/api/scoreboard/current" && method === "GET") {
     const week = await ensureCurrentWeek(db);
     const scoreboard = await fetchScoreboard(db, week.id);
-    return json(scoreboard);
+    const term = await fetchActiveTerm(db);
+    let termRows = [];
+    let termError = null;
+    if (term) {
+      termRows = await fetchTermScoreboard(db, term);
+    } else {
+      termError = "No active term";
+    }
+    return json({
+      ...scoreboard,
+      week: {
+        ...camelizeWeek(week),
+        rows: scoreboard.totalsThisWeek,
+      },
+      term: term
+        ? {
+            id: term.id,
+            name: term.name,
+            start_date: term.start_date,
+            end_date: term.end_date,
+            is_active: term.is_active,
+            rows: termRows,
+          }
+        : null,
+      term_error: termError,
+    });
   }
 
   if (pathname === "/api/missing/current" && method === "GET") {

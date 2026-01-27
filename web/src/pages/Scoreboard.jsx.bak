@@ -12,18 +12,6 @@ import {
 import { Flag, Trophy } from "lucide-react";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
 
-const formatReadableDate = (value) => {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return null;
-  return new Date(parsed).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
-
 const clamp01 = (value) => {
   const num = Number(value ?? 0);
   if (Number.isNaN(num)) return 0;
@@ -63,17 +51,15 @@ function ProgressTrack({
         {title}
       </p>
 
-      <div className="relative h-28">
-        <div className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 overflow-hidden rounded-full bg-slate-200">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-slate-400"
-            style={{ width: `${clampedTime * 100}%` }}
-          />
-          <div
-            className="absolute inset-y-0 right-0 h-full rounded-full bg-white/70"
-            style={{ width: `${(1 - clampedTime) * 100}%` }}
-          />
-        </div>
+      <div className="relative h-3 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-slate-400"
+          style={{ width: `${clampedTime * 100}%` }}
+        />
+        <div
+          className="absolute inset-y-0 right-0 h-full rounded-full bg-white/70"
+          style={{ width: `${(1 - clampedTime) * 100}%` }}
+        />
         <span
           className="absolute inset-y-0 w-[3px] bg-slate-700"
           style={{
@@ -82,54 +68,42 @@ function ProgressTrack({
           }}
         />
         <Flag
-          className="absolute -translate-y-full text-slate-700"
+          className="absolute top-0 -translate-y-full text-slate-700"
           size={16}
           style={{ left: `${clampedTime * 100}%`, transform: "translate(-50%,-50%)" }}
         />
-        <div className="absolute inset-0">
-          {disabled && markers.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              {placeholderText || "Waiting for data…"}
-            </div>
-          ) : (
-            markers.map((house, index) => {
-              const Icon = house.icon;
-              const labelAbove = index % 2 === 0;
-              return (
-                <div
-                  key={house.houseKey}
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
-                  style={{ left: `${house.finalProgress * 100}%` }}
-                >
-                  <span
-                    className={`
-                      absolute inline-flex flex-col items-center
-                      ${labelAbove ? "-top-10" : "top-12"}
-                    `}
-                  >
-                    <span
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm whitespace-nowrap"
-                    >
-                      {house.name}
-                    </span>
-                    <span
-                      className={`
-                        absolute h-2 w-2 border border-slate-200 bg-white
-                        ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
-                      `}
-                    />
+      </div>
+
+      <div className="relative mt-6 h-20">
+        {disabled && markers.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            {placeholderText || "Waiting for data…"}
+          </div>
+        ) : (
+          markers.map((house) => {
+            const Icon = house.icon;
+            return (
+              <div
+                key={house.houseKey}
+                className="absolute -translate-x-1/2 flex flex-col items-center"
+                style={{ left: `${house.finalProgress * 100}%` }}
+              >
+                <span className="relative mb-1 inline-flex flex-col items-center">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm whitespace-nowrap">
+                    {house.name}
                   </span>
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full shadow-md ring-2 ring-white"
-                    style={{ backgroundColor: house.color || "#2563eb" }}
-                  >
-                    {Icon ? <Icon className="h-5 w-5 text-white" /> : null}
-                  </div>
+                  <span className="absolute top-full mt-0.5 h-2 w-2 -rotate-45 border border-slate-200 bg-white" />
+                </span>
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full shadow-md ring-2 ring-white"
+                  style={{ backgroundColor: house.color || "#2563eb" }}
+                >
+                  {Icon ? <Icon className="h-5 w-5 text-white" /> : null}
                 </div>
-              );
-            })
-          )}
-        </div>
+              </div>
+            );
+          })
+        )}
       </div>
       {footer && <div className="mt-4 border-t border-slate-100 pt-4">{footer}</div>}
     </div>
@@ -380,13 +354,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   }, [scoreboard.term]);
 
   const termDisabled = !scoreboard.term;
-  const weekStartLabel = useMemo(
-    () =>
-      formatReadableDate(
-        scoreboard.week?.week_start ?? scoreboard.week?.weekStart ?? null
-      ),
-    [scoreboard.week]
-  );
+  const weekStartLabel = useMemo(() => scoreboard.week?.week_start ?? scoreboard.week?.weekStart ?? null, [scoreboard.week]);
   const termSubtitle = useMemo(() => {
     if (!scoreboard.term) {
       return null;
@@ -394,11 +362,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     const name = scoreboard.term.name ?? scoreboard.term.termName ?? "Current Term";
     const start = scoreboard.term.start_date ?? scoreboard.term.startDate;
     const end = scoreboard.term.end_date ?? scoreboard.term.endDate;
-    const formattedStart = formatReadableDate(start);
-    const formattedEnd = formatReadableDate(end);
-    return formattedStart && formattedEnd
-      ? `${name} · ${formattedStart} – ${formattedEnd}`
-      : name;
+    return start && end ? `${name} · ${start} – ${end}` : name;
   }, [scoreboard.term]);
 
   const containerClasses = minimal ? "h-full" : "space-y-6";
@@ -469,6 +433,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Live scoreboard</p>
+          <h1 className="text-3xl font-bold text-slate-900">House totals</h1>
           <p className="text-[9px] text-slate-600">Updated: {lastUpdatedLabel}</p>
         </div>
       </div>
@@ -477,8 +442,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full">
           <div className="mb-4 space-y-1">
-            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Current Week<br/>From Monday:</p>
-             {weekStartLabel && (
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Current Week</p>
+            {weekStartLabel && (
               <p className="text-sm font-semibold text-slate-700">{weekStartLabel}</p>
             )}
           </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getHouseById } from "../config/houses";
 
 export default function Admin() {
   const [entries, setEntries] = useState([]);
@@ -109,33 +110,45 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="px-3 py-3 font-semibold text-slate-900">{entry.class_name}</td>
-                    <td className="px-3 py-3">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: entry.house_color }}
-                        />
-                        <span className="text-slate-700">{entry.house_name}</span>
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 font-semibold text-slate-900">{entry.points}</td>
-                    <td className="px-3 py-3 text-slate-600">{entry.submitted_by_email}</td>
-                    <td className="px-3 py-3 text-slate-600">{entry.entry_date}</td>
-                    <td className="px-3 py-3 text-slate-600">{entry.notes || "—"}</td>
-                    <td className="px-3 py-3">
-                      <button
-                        disabled={deletingId === entry.id}
-                        onClick={() => handleDelete(entry.id)}
-                        className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 transition hover:text-rose-400 disabled:text-slate-400"
-                      >
-                        {deletingId === entry.id ? "Deleting…" : "Delete"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {entries.map((entry) => {
+                  const houseId = entry.house_id || entry.houseId;
+                  const houseMeta = getHouseById(houseId);
+                  const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
+                  const HouseIcon = houseMeta?.icon;
+                  const houseLabel = houseMeta?.name ?? entry.house_name;
+                  return (
+                    <tr key={entry.id}>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{entry.class_name}</td>
+                      <td className="px-3 py-3">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: houseColor }}
+                          />
+                          <span className="flex items-center gap-2 text-slate-700">
+                            {HouseIcon && (
+                              <HouseIcon className="h-4 w-4" color={houseColor} />
+                            )}
+                            {houseLabel}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{entry.points}</td>
+                      <td className="px-3 py-3 text-slate-600">{entry.submitted_by_email}</td>
+                      <td className="px-3 py-3 text-slate-600">{entry.entry_date}</td>
+                      <td className="px-3 py-3 text-slate-600">{entry.notes || "—"}</td>
+                      <td className="px-3 py-3">
+                        <button
+                          disabled={deletingId === entry.id}
+                          onClick={() => handleDelete(entry.id)}
+                          className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 transition hover:text-rose-400 disabled:text-slate-400"
+                        >
+                          {deletingId === entry.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
