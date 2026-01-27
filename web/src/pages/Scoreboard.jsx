@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Trophy } from "lucide-react";
 
 export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, minimal = false }) {
   const [scoreboard, setScoreboard] = useState({
@@ -177,9 +178,16 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         <h1 className="text-3xl font-bold text-slate-900">House totals</h1>
         <p className="text-sm text-slate-600">Updated: {lastUpdatedLabel}</p>
         {leadingHouse && (
-          <p className="text-sm font-semibold text-emerald-700">
-            🏆 {leadingHouse.name} is leading with {leadingHouse.points} pts
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-slate-200 bg-gradient-to-br from-white via-slate-100 to-slate-200 p-3 shadow-[0_25px_45px_rgba(15,23,42,0.18)]">
+              <span className="flex h-full w-full items-center justify-center rounded-[16px] bg-gradient-to-b from-white to-slate-100 shadow-[inset_0_-10px_30px_rgba(15,23,42,0.08)]">
+                <Trophy className="h-6 w-6 text-emerald-600 drop-shadow-[0_5px_15px_rgba(16,185,129,0.3)]" />
+              </span>
+            </span>
+            <p className="text-sm font-semibold text-emerald-700">
+              {leadingHouse.name} is leading with {leadingHouse.points} pts
+            </p>
+          </div>
         )}
       </div>
 
