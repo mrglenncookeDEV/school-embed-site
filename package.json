@@ -5,13 +5,13 @@
   "scripts": {
     "dev": "npx wrangler dev --local --port 8787",
     "start": "npx wrangler dev",
-
     "build:web": "cd web && npm run build",
-
     "deploy": "npm run build:web && npx wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.60.0"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4"
   }
-
 }

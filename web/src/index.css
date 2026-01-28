@@ -50,3 +50,11 @@ body {
     animation: none;
   }
 }
+@keyframes bar-flash {
+  0% { filter: brightness(1); }
+  20% { filter: brightness(1.45); }
+  40% { filter: brightness(1); }
+  60% { filter: brightness(1.45); }
+  80% { filter: brightness(1); }
+  100% { filter: brightness(1.45); }
+}

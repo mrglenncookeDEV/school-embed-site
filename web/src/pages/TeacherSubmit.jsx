@@ -103,6 +103,9 @@ export default function TeacherSubmit() {
         points: "",
         notes: "",
       }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("scoreboard:refresh"));
+      }
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     }

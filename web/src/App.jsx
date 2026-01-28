@@ -76,49 +76,56 @@ function AppContent() {
   return (
     <div className={isEmbedRoute ? "min-h-screen bg-white" : "min-h-screen bg-slate-50 text-slate-900"}>
       {!isEmbedRoute && (
-       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-4 shadow-sm backdrop-blur">
-  <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <p className="text-sm uppercase tracking-[0.2em] text-slate-500 whitespace-nowrap">
-        House Points
-      </p>
-      <p className="text-2xl font-semibold text-slate-900 whitespace-nowrap">
-        Weekly Competition
-      </p>
-    </div>
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-4 shadow-sm backdrop-blur">
+          <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <img
+                src="/favicon.png"
+                alt="House Points logo"
+                className="h-[80px] w-[80px] object-cover"
+                loading="lazy"
+              />
+              <div>
+                <p className="text-sm uppercase tracking-[0.2em] text-slate-500 whitespace-nowrap">
+                  House Points
+                </p>
+                <p className="text-2xl font-semibold text-slate-900 whitespace-nowrap">
+                  Weekly Competition
+                </p>
+              </div>
+            </div>
 
-    <nav className="flex flex-wrap items-center gap-3 text-sm font-medium sm:flex-nowrap">
-      {navItems.map((item) => (
-        item.action ? (
-          <button
-            key={item.label}
-            type="button"
-            onClick={item.action}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
-          >
-            {item.label}
-          </button>
-        ) : (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              `rounded-lg px-3 py-2 transition ${
-                isActive
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:text-slate-900"
-              }`
-            }
-          >
-            {item.label}
-          </NavLink>
-        )
-      ))}
-    </nav>
-  </div>
-</header>
-
+            <nav className="flex flex-wrap items-center gap-3 text-sm font-medium sm:flex-nowrap">
+              {navItems.map((item) => (
+                item.action ? (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={item.action}
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                  >
+                    {item.label}
+                  </button>
+                ) : (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `rounded-lg px-3 py-2 transition ${
+                        isActive
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                )
+              ))}
+            </nav>
+          </div>
+        </header>
       )}
 
       <main

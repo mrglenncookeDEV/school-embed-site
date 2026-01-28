@@ -3,7 +3,8 @@ cat > .gitignore << 'EOF'
 node_modules/
 
 # build output (React build goes here in this project)
-public/
+public/*
+!public/favicon.png
 dist/
 
 # env files
