@@ -5,6 +5,8 @@ node_modules/
 # build output (React build goes here in this project)
 public/*
 !public/favicon.png
+!public/progress/
+!public/progress/*
 dist/
 
 # env files

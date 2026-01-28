@@ -5,6 +5,9 @@
 :root {
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: #f8fafc;
+  /* Shared visual geometry */
+  --track-half-height: 14px;
+  --kerb-height: 3px;
 }
 
 body {
@@ -57,4 +60,81 @@ body {
   60% { filter: brightness(1.45); }
   80% { filter: brightness(1); }
   100% { filter: brightness(1.45); }
+}
+
+/* === Base track: static, full width === */
+.race-track {
+  position: relative;
+  background: transparent;
+}
+
+
+.race-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--track-half-height));
+  bottom: calc(-1 * var(--track-half-height));
+
+  background: #e5e7eb;
+  z-index: 0;
+}
+.race-track-progress {
+  position: absolute;
+  left: 0;
+  top: calc(-1 * var(--track-half-height));
+  bottom: calc(-1 * var(--track-half-height));
+
+  background:
+    linear-gradient(
+      to bottom,
+      #6b7280 0%,
+      #4b5563 50%,
+      #6b7280 100%
+    );
+
+  z-index: 1;
+}
+
+.race-track-kerbs::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--kerb-height);
+  top: calc(-1 * var(--track-half-height) - var(--kerb-height));
+
+  background:
+    repeating-linear-gradient(
+      to right,
+      #dc2626 0px,
+      #dc2626 6px,
+      #ffffff 6px,
+      #ffffff 12px
+    );
+
+  opacity: 0.45;
+  z-index: 2;
+}
+
+.race-track-kerbs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--kerb-height);
+  bottom: calc(-1 * var(--track-half-height) - var(--kerb-height));
+
+  background:
+    repeating-linear-gradient(
+      to right,
+      #dc2626 0px,
+      #dc2626 6px,
+      #ffffff 6px,
+      #ffffff 12px
+    );
+
+  opacity: 0.45;
+  z-index: 2;
 }
