@@ -18,6 +18,14 @@ const json = (data, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
+const AWARD_CATEGORIES = [
+  "General Award",
+  "Be Kind",
+  "Be Responsible",
+  "Be Safe",
+  "Be Ready",
+];
+
 async function checkSchema(db) {
   try {
     await db.prepare("SELECT 1 FROM weeks LIMIT 1").all();
@@ -95,9 +103,29 @@ async function fetchHouses(db) {
 
 async function fetchClasses(db) {
   const { results } = await db
-    .prepare("SELECT id, name, teacher_name, teacher_email FROM classes ORDER BY name ASC")
+    .prepare(
+      `SELECT
+        id,
+        name,
+        YearGrp,
+        Teacher_Title,
+        Teacher_FirstName,
+        Teacher_LastName,
+        Teacher_email
+      FROM classes
+      ORDER BY YearGrp, name`
+    )
     .all();
-  return results;
+  return results.map((row) => ({
+    id: row.id,
+    name: row.name,
+    YearGrp: row.YearGrp,
+    teacherTitle: row.Teacher_Title,
+    teacherFirstName: row.Teacher_FirstName,
+    teacherLastName: row.Teacher_LastName,
+    teacherEmail: row.Teacher_email,
+    teacherDisplayName: `${row.Teacher_Title ?? ""} ${row.Teacher_LastName ?? ""}`.trim(),
+  }));
 }
 
 async function fetchScoreboard(db, weekId) {
@@ -195,19 +223,31 @@ async function fetchMissingClasses(db, weekId) {
       `SELECT
         c.id,
         c.name,
-        c.teacher_name,
-        c.teacher_email
+        c.YearGrp,
+        c.Teacher_Title,
+        c.Teacher_FirstName,
+        c.Teacher_LastName,
+        c.Teacher_email
       FROM classes c
       WHERE NOT EXISTS (
         SELECT 1 FROM point_entries pe
         WHERE pe.class_id = c.id AND pe.week_id = ?
       )
-      ORDER BY c.name ASC`
+      ORDER BY c.YearGrp, c.name ASC`
     )
     .bind(weekId)
     .all();
 
-  return results;
+  return results.map((row) => ({
+    id: row.id,
+    name: row.name,
+    YearGrp: row.YearGrp,
+    teacherTitle: row.Teacher_Title,
+    teacherFirstName: row.Teacher_FirstName,
+    teacherLastName: row.Teacher_LastName,
+    teacherEmail: row.Teacher_email,
+    teacherDisplayName: `${row.Teacher_Title ?? ""} ${row.Teacher_LastName ?? ""}`.trim(),
+  }));
 }
 
 async function fetchEntries(db, weekId) {
@@ -218,6 +258,7 @@ async function fetchEntries(db, weekId) {
         pe.entry_date,
         pe.points,
         pe.notes,
+        pe.award_category,
         pe.submitted_by_email,
         pe.updated_at,
         c.id AS class_id,
@@ -259,14 +300,37 @@ async function seedDefaultHouses(db) {
 
 async function seedDefaultClasses(db) {
   const classes = [
-    { name: "Class 1A", teacher_name: "Teacher A", teacher_email: "teacher1@school.org" },
-    { name: "Class 1B", teacher_name: "Teacher B", teacher_email: "teacher2@school.org" },
+    {
+      name: "Class 1A",
+      YearGrp: 3,
+      Teacher_Title: "Ms",
+      Teacher_FirstName: "Ada",
+      Teacher_LastName: "Smith",
+      Teacher_email: "teacher1@school.org",
+    },
+    {
+      name: "Class 1B",
+      YearGrp: 3,
+      Teacher_Title: "Mr",
+      Teacher_FirstName: "Ben",
+      Teacher_LastName: "Jones",
+      Teacher_email: "teacher2@school.org",
+    },
   ];
   const before = await countRows(db, "classes");
   for (const klass of classes) {
     await db
-      .prepare("INSERT OR IGNORE INTO classes (name, teacher_name, teacher_email) VALUES (?, ?, ?)")
-      .bind(klass.name, klass.teacher_name, klass.teacher_email)
+      .prepare(
+        "INSERT OR IGNORE INTO classes (name, YearGrp, Teacher_Title, Teacher_FirstName, Teacher_LastName, Teacher_email) VALUES (?, ?, ?, ?, ?, ?)"
+      )
+      .bind(
+        klass.name,
+        klass.YearGrp,
+        klass.Teacher_Title,
+        klass.Teacher_FirstName,
+        klass.Teacher_LastName,
+        klass.Teacher_email
+      )
       .run();
   }
   const after = await countRows(db, "classes");
@@ -296,6 +360,10 @@ async function handleEntriesPost(request, db, week) {
   const points = Number(payload.points);
   const submittedByEmail = payload.submittedByEmail?.trim();
   const notes = payload.notes?.trim() || null;
+  const awardCategoryRaw = (payload.award_category ?? "").trim();
+  const awardCategory = AWARD_CATEGORIES.includes(awardCategoryRaw)
+    ? awardCategoryRaw
+    : AWARD_CATEGORIES[0];
 
   if (!classId || !houseId || !Number.isInteger(points)) {
     return json({ error: "classId, houseId, and points are required" }, 400);
@@ -321,24 +389,35 @@ async function handleEntriesPost(request, db, week) {
         points,
         notes,
         submitted_by_email,
+        award_category,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       ON CONFLICT(week_id, class_id, house_id)
       DO UPDATE SET
         entry_date = excluded.entry_date,
         points = excluded.points,
         notes = excluded.notes,
         submitted_by_email = excluded.submitted_by_email,
+        award_category = excluded.award_category,
         updated_at = datetime('now')`
     )
-    .bind(entryDate, week.id, houseId, classId, points, notes, submittedByEmail)
+    .bind(
+      entryDate,
+      week.id,
+      houseId,
+      classId,
+      points,
+      notes,
+      submittedByEmail,
+      awardCategory
+    )
     .run();
 
   const { results } = await db
     .prepare(
-      `SELECT id, entry_date, week_id, house_id, class_id, points, notes, submitted_by_email
+      `SELECT id, entry_date, week_id, house_id, class_id, points, notes, submitted_by_email, award_category
        FROM point_entries
        WHERE week_id = ? AND class_id = ? AND house_id = ?
        LIMIT 1`
@@ -353,7 +432,7 @@ async function handleEntriesPost(request, db, week) {
       actorEmail: submittedByEmail,
       targetType: "entry",
       targetId: entry.id,
-      meta: { points, notes, weekId: week.id, classId, houseId },
+      meta: { points, notes, awardCategory, weekId: week.id, classId, houseId },
     });
   }
 

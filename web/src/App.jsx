@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrowserRouter as Router, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import Admin from "./pages/Admin";
 import EmbedScoreboard from "./pages/EmbedScoreboard";
@@ -60,18 +60,39 @@ function SlideUpModal({ open, onClose, children }) {
 function AppContent() {
   const location = useLocation();
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
   const isEmbedRoute = location.pathname.startsWith("/embed/");
+  const openTeacherSubmit = useCallback((entry = null) => {
+    setEditingEntry(entry);
+    setTeacherModalOpen(true);
+  }, []);
+  const closeTeacherSubmit = useCallback(() => {
+    setTeacherModalOpen(false);
+    setEditingEntry(null);
+  }, []);
+
   const navItems = [
     { label: "Scoreboard", to: "/", end: true },
-    { label: "Submit Points", action: () => setTeacherModalOpen(true) },
+    { label: "Submit Points", action: () => openTeacherSubmit(null) },
     { label: "Admin", to: "/admin" },
     { label: "Embed", to: "/embed/scoreboard" },
   ];
   useEffect(() => {
     if (location.pathname === "/teacher") {
-      setTeacherModalOpen(true);
+      openTeacherSubmit(null);
     }
-  }, [location.pathname]);
+  }, [location.pathname, openTeacherSubmit]);
+
+  useEffect(() => {
+    const handleEditEvent = (event) => {
+      openTeacherSubmit(event?.detail?.entry ?? null);
+    };
+
+    window.addEventListener("teacherSubmit:open", handleEditEvent);
+    return () => {
+      window.removeEventListener("teacherSubmit:open", handleEditEvent);
+    };
+  }, [openTeacherSubmit]);
 
   return (
     <div className={isEmbedRoute ? "min-h-screen bg-white" : "min-h-screen bg-slate-50 text-slate-900"}>
@@ -144,8 +165,8 @@ function AppContent() {
           <Route path="*" element={<Scoreboard />} />
         </Routes>
       </main>
-      <SlideUpModal open={isTeacherModalOpen} onClose={() => setTeacherModalOpen(false)}>
-        <TeacherSubmit />
+      <SlideUpModal open={isTeacherModalOpen} onClose={closeTeacherSubmit}>
+        <TeacherSubmit entry={editingEntry} />
       </SlideUpModal>
     </div>
   );

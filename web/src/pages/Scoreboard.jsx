@@ -46,7 +46,7 @@ const buildWeekRangeLabel = (week) => {
     week?.weekEnd ??
     (Number.isNaN(parsedStart)
       ? null
-      : new Date(parsedStart + 6 * 24 * 60 * 60 * 1000).toISOString());
+      : new Date(parsedStart + 4 * 24 * 60 * 60 * 1000).toISOString());
 
   const formattedStart = formatReadableDate(rawStart);
   const formattedEnd = formatReadableDate(rawEnd);
@@ -303,6 +303,7 @@ function ProgressTrack({
           style={{ "--progress-percent": `${clampedTime * 100}%` }}
         />
       </div>
+
       <img
         src="/progress/finish-flag.png"
         alt="Finish"
@@ -344,12 +345,13 @@ function ProgressTrack({
               house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
             const isHighlighted = highlightSet.has(highlightKey);
             const carColor = house.color ?? "#0f172a";
-            const carFilter = isHighlighted
-              ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
-              : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
             const isLeader = Boolean(
               leaderHouseKey && highlightKey && highlightKey === leaderHouseKey
             );
+            const carFilter =
+              isHighlighted && !isLeader
+                ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
+                : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
             const markerKey = `${highlightKey}-${house.stackIndex}-${house.stackSize}`;
 
             return (
@@ -524,7 +526,7 @@ function ProgressTrack({
 
       {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
-      <div className="relative overflow-visible px-12">
+      <div className="relative overflow-visible px-8">
         {renderAboveTrackElements()}
         <div
           className="absolute bg-slate-300 start-marker-line"
@@ -1250,7 +1252,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               className="highlight-title text-lg uppercase tracking-[0.4em]"
               style={{ ...PLAYFUL_FONT, color: WEEK_TITLE_COLOR }}
             >
-              Current Week
+              This Week
             </h2>
             {weekRangeLabel && (
               <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
@@ -1307,7 +1309,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               className="highlight-title text-lg uppercase tracking-[0.4em]"
               style={{ ...PLAYFUL_FONT, color: TERM_TITLE_COLOR }}
             >
-              Current Term
+              This Term
             </h2>
             {termSubtitle && (
               <p className="text-sm font-semibold text-slate-700">{termSubtitle}</p>
@@ -1357,41 +1359,6 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         </div>
       </div>
 
-      <div className="space-y-4">
-        <ProgressTrack
-          title="RACE FOR THE WEEK!"
-          rows={weekRows}
-          timeProgress={weekTimeProgress}
-          placeholderText="Week data unavailable"
-          highlightHouseKeys={tiedHouseKeys}
-          timePillType="weekday"
-          finishLabel="Finish · Friday 12:00"
-          timePillPrimaryColor={leadingHouseColor}
-          timePillTieColors={tieHouseColors}
-          footer={leadingHouseFooter}
-          titleColor={WEEK_TITLE_COLOR}
-          borderStyle={weekTrackBorderStyle}
-          leaderHouseKey={weekLeadingHouseKey}
-        />
-        <ProgressTrack
-          title="RACE FOR THE TERM!!!"
-          rows={termRows}
-          timeProgress={termTimeProgress}
-          disabled={termDisabled}
-          placeholderText="No active term"
-          highlightHouseKeys={termTiedHouseKeys}
-          timePillType="date"
-          finishLabel="Finish · 13th Feb"
-          titleColor={TERM_TITLE_COLOR}
-          borderStyle={termTrackBorderStyle}
-          timePillPrimaryColor={termLeadingHouseColor}
-          timePillTieColors={termTieColors}
-          footer={termLeadingHouseFooter}
-          termEndDate={termEndDate}
-          leaderHouseKey={termLeadingHouseKey}
-        />
-      </div>
-
       {showTotalsPanel && (
         <div className="grid gap-6 sm:grid-cols-2">
           <div
@@ -1431,11 +1398,48 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         </div>
       )}
 
+      <div className="space-y-4">
+        <ProgressTrack
+          title="RACE FOR THE WEEK!"
+          rows={weekRows}
+          timeProgress={weekTimeProgress}
+          placeholderText="Week data unavailable"
+          highlightHouseKeys={tiedHouseKeys}
+          timePillType="weekday"
+          finishLabel="Finish · Friday 12:00"
+          timePillPrimaryColor={leadingHouseColor}
+          timePillTieColors={tieHouseColors}
+          footer={leadingHouseFooter}
+          titleColor={WEEK_TITLE_COLOR}
+          borderStyle={weekTrackBorderStyle}
+          leaderHouseKey={weekLeadingHouseKey}
+        />
+        <ProgressTrack
+          title="RACE FOR THE TERM!!!"
+          rows={termRows}
+          timeProgress={termTimeProgress}
+          disabled={termDisabled}
+          placeholderText="No active term"
+          highlightHouseKeys={termTiedHouseKeys}
+          timePillType="date"
+          finishLabel="Finish · 13th Feb"
+          titleColor={TERM_TITLE_COLOR}
+          borderStyle={termTrackBorderStyle}
+          timePillPrimaryColor={termLeadingHouseColor}
+          timePillTieColors={termTieColors}
+          footer={termLeadingHouseFooter}
+          termEndDate={termEndDate}
+          leaderHouseKey={termLeadingHouseKey}
+        />
+      </div>
+
       {showMissing && (
         <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-            <h2 className="highlight-title text-lg uppercase tracking-[0.4em] text-red-500">
+              <h2
+                className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500"
+              >
                 Missing submissions
               </h2>
               <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
@@ -1464,9 +1468,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                       {klass.reason ?? "Missing"}
                     </span>
                   </div>
-                  {klass.teacher_name || klass.teacher_email ? (
+                  {klass.teacherDisplayName || klass.teacher_email ? (
                     <p className="mt-2 text-xs text-red-500">
-                      {klass.teacher_name} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
+                      {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
                     </p>
                   ) : null}
                 </li>

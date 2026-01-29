@@ -1,20 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 
+const AWARD_OPTIONS = [
+  "General Award",
+  "Be Kind",
+  "Be Responsible",
+  "Be Safe",
+  "Be Ready",
+];
+
 const initialForm = {
   classId: "",
   houseId: "",
-  points: "",
+  points: "0",
   notes: "",
   submittedByEmail: "",
 };
 
-export default function TeacherSubmit() {
+export default function TeacherSubmit({ entry } = {}) {
   const [form, setForm] = useState(initialForm);
   const [classes, setClasses] = useState([]);
   const [houses, setHouses] = useState([]);
   const [deadline, setDeadline] = useState("");
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [loading, setLoading] = useState(true);
+  const [awardCategory, setAwardCategory] = useState("General Award");
+  const isEditing = Boolean(entry);
+
+  useEffect(() => {
+    if (!entry) {
+      setForm(initialForm);
+      setAwardCategory("General Award");
+      return;
+    }
+
+    setForm({
+      classId: entry.class_id ?? entry.classId ?? "",
+      houseId: entry.house_id ?? entry.houseId ?? "",
+      points: entry.points !== undefined ? String(entry.points) : "0",
+      notes: entry.notes ?? "",
+      submittedByEmail:
+        entry.submitted_by_email ?? entry.submittedByEmail ?? "",
+    });
+    setAwardCategory(entry.award_category ?? "General Award");
+  }, [entry]);
 
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +117,7 @@ export default function TeacherSubmit() {
         body: JSON.stringify({
           ...form,
           points: Number(form.points),
+          award_category: awardCategory,
         }),
       });
 
@@ -100,9 +129,10 @@ export default function TeacherSubmit() {
       setStatus({ type: "success", message: "Points submitted!" });
       setForm((prev) => ({
         ...prev,
-        points: "",
+        points: "0",
         notes: "",
       }));
+      setAwardCategory("General Award");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("scoreboard:refresh"));
       }
@@ -116,13 +146,40 @@ export default function TeacherSubmit() {
     [houses]
   );
 
+  const handleClassChange = (value) => {
+    const selectClass = classes.find((klass) => String(klass.id) === value);
+    setForm((prev) => ({
+      ...prev,
+      classId: value,
+      submittedByEmail:
+        value === ""
+          ? ""
+          : selectClass?.teacherEmail ?? prev.submittedByEmail,
+    }));
+  };
+
   return (
     <section className="flex w-full flex-col gap-6">
-      <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">Teacher Submit</p>
-        <h1 className="text-3xl font-bold text-slate-900">Log house points</h1>
-        {deadline && <p className="text-sm text-slate-600">{deadline}</p>}
-      </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <img
+              src="/favicon.png"
+              alt="House Points logo"
+              className="h-12 w-12 sm:h-24 sm:w-24 object-contain"
+              loading="lazy"
+            />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">Teacher Submit</p>
+              <h1 className="text-3xl font-bold text-slate-900">
+                {isEditing ? "Edit submission" : "Log house points"}
+              </h1>
+              {isEditing && (
+                <p className="text-sm text-slate-600">
+                  Editing an existing record — submit points to save changes.
+                </p>
+              )}
+              {deadline && <p className="text-sm text-slate-600">{deadline}</p>}
+            </div>
+          </div>
 
       {status.message && (
         <div
@@ -143,16 +200,16 @@ export default function TeacherSubmit() {
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <label className="space-y-1 text-sm font-semibold text-slate-700">
               Class
-              <select
-                value={form.classId}
-                onChange={(event) => setForm({ ...form, classId: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
-              >
+                <select
+                  value={form.classId}
+                  onChange={(event) => handleClassChange(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
+                >
                 <option value="">Select class</option>
                 {classes.map((klass) => (
-                  <option key={klass.id} value={klass.id}>
-                    {klass.name} · {klass.teacher_name}
-                  </option>
+                    <option key={klass.id} value={klass.id}>
+                      {klass.name} · {klass.teacherDisplayName}
+                    </option>
                 ))}
               </select>
             </label>
@@ -173,18 +230,37 @@ export default function TeacherSubmit() {
               </select>
             </label>
 
-            <label className="space-y-1 text-sm font-semibold text-slate-700">
-              Points
-              <input
-                type="number"
-                min="0"
-                max="500"
-                step="1"
-                value={form.points}
-                onChange={(event) => setForm({ ...form, points: event.target.value })}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
-              />
-            </label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-slate-700">Award Category</label>
+                <select
+                  value={awardCategory}
+                  onChange={(event) => setAwardCategory(event.target.value)}
+                  className="border rounded-md px-3 py-2 bg-white dark:bg-slate-900 text-slate-900"
+                >
+                  {AWARD_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-slate-700">Points</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="500"
+                  step="1"
+                  value={form.points}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, points: event.target.value }))
+                  }
+                  className="border rounded-md px-3 py-2 bg-sky-600 dark:bg-slate-900 text-slate-100 text-center w-full max-w-[120px] md:max-w-[140px] mx-auto md:mx-0 appearance-auto"
+                  required
+                />
+              </div>
+            </div>
 
             <label className="space-y-1 text-sm font-semibold text-slate-700">
               Notes
@@ -212,7 +288,11 @@ export default function TeacherSubmit() {
                 submitDisabled ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
               }`}
             >
-              {isSubmitting ? "Saving…" : "Submit points"}
+              {isSubmitting
+                ? "Saving…"
+                : isEditing
+                ? "Save changes"
+                : "Submit points"}
             </button>
 
             {status.type === "error" && (

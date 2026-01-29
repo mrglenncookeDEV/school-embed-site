@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS point_entries (
   class_id INTEGER NOT NULL,
   points INTEGER NOT NULL CHECK(points >= 0),
   notes TEXT,
+  award_category TEXT NOT NULL DEFAULT 'General Award',
   submitted_by_email TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
