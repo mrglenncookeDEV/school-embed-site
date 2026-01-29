@@ -21,7 +21,7 @@ const PLAYFUL_FONT = {
   letterSpacing: "0.04em",
 };
 
-
+const LANES = [-18, -6, 6, 18];
 
 const WEEK_TITLE_COLOR = "#0ea5e9";
 const TERM_TITLE_COLOR = "#be185d";
@@ -261,12 +261,14 @@ function ProgressTrack({
   const markers = useMemo(() => {
     if (disabled) return [];
 
-    const computed = effectiveRows.map((house) => {
+    const computed = effectiveRows.map((house, index) => {
       const scoreProgress = maxPoints > 0 ? (house.points ?? 0) / maxPoints : 0;
+      const laneIndex = index % LANES.length;
 
       return {
         ...house,
         finalProgress: scoreProgress * clampedTime,
+        laneIndex,
       };
     });
 
@@ -286,146 +288,130 @@ function ProgressTrack({
     );
   }, [disabled, effectiveRows, maxPoints, clampedTime]);
 
-  const prevStackSignatureRef = useRef("");
-  const stackSignature = useMemo(
-    () =>
-      markers
-        .map((m) => `${m.houseKey}:${m.stackIndex}/${m.stackSize}`)
-        .join("|"),
-    [markers]
-  );
-
-  useEffect(() => {
-    prevStackSignatureRef.current = stackSignature;
-  }, [stackSignature]);
-
-  const STACK_Y_GAP = 48;
-  const STACK_X_GAP = 24;
   const FAN_OUT_DURATION = "320ms";
 
   const renderTrackZone = () => (
-    <div className="track-outer">
-      <div className="track-inner">
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-          <div className="race-track track-tarmac race-track-kerbs">
-            <div
-              className="race-track-progress"
-              style={{ width: `${clampedTime * 100}%` }}
-            />
+    <div className="track-wrapper">
+      <div className="track-road">
+        <div className="track-kerb top" />
+        <div className="track-kerb bottom" />
+        <div className="track-tarmac" />
+        <div className="track-grain" />
+        <div className="track-center-line" />
+        <div
+          className="track-center-fade"
+          style={{ "--progress-percent": `${clampedTime * 100}%` }}
+        />
+      </div>
+      <img
+        src="/progress/finish-flag.png"
+        alt="Finish"
+        className="absolute"
+        style={{
+          right: "-36px",
+          top: TRACK_CENTER_Y,
+          transform: "translateY(-50%)",
+          width: "48px",
+          zIndex: 6,
+        }}
+      />
+      <TrafficLights
+        className="absolute"
+        style={{
+          left: "-36px",
+          top: TRACK_CENTER_Y,
+          width: "56px",
+          height: "56px",
+          color: "#22c55e",
+          fill: "#22c55e",
+          zIndex: 6,
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+      <div className="house-cars absolute inset-0">
+        {disabled && markers.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            {placeholderText || "Waiting for data…"}
           </div>
-        </div>
-        <img
-          src="/progress/finish-flag.png"
-          alt="Finish"
-          className="absolute"
-          style={{
-            right: "-36px",
-            top: TRACK_CENTER_Y,
-            transform: "translateY(-50%)",
-            width: "48px",
-            zIndex: 6,
-          }}
-        />
-        <TrafficLights
-          className="absolute"
-          style={{
-            left: "-36px",
-            top: TRACK_CENTER_Y,
-            width: "56px",
-            height: "56px",
-            color: "#22c55e",
-            fill: "#22c55e",
-            zIndex: 6,
-            transform: "translate(-50%, -50%)",
-          }}
-        />
-        <div className="absolute inset-0">
-          {disabled && markers.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              {placeholderText || "Waiting for data…"}
-            </div>
-          ) : (
-            markers.map((house) => {
-              const stackIndex = house.stackIndex ?? 0;
-              const stackSize = house.stackSize ?? 1;
-              const mid = (stackSize - 1) / 2;
-              const yOffset =
-                stackSize > 1 ? (stackIndex - mid) * STACK_Y_GAP : 0;
-              const xOffset =
-                stackSize >= 3 ? (stackIndex - mid) * STACK_X_GAP : 0;
-              const labelAbove = stackSize > 1 ? stackIndex % 2 === 0 : false;
-              const highlightKey =
-                house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
-              const isHighlighted = highlightSet.has(highlightKey);
-              const carColor = house.color ?? "#0f172a";
-              const carFilter = isHighlighted
-                ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
-                : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
-              const isLeader = Boolean(
-                leaderHouseKey && highlightKey && highlightKey === leaderHouseKey
-              );
+        ) : (
+          markers.map((house) => {
+            const laneOffset = LANES[house.laneIndex ?? 0] ?? 0;
+            const labelAbove =
+              house.stackSize > 1
+                ? house.stackIndex % 2 === 0
+                : laneOffset < 0;
+            const highlightKey =
+              house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
+            const isHighlighted = highlightSet.has(highlightKey);
+            const carColor = house.color ?? "#0f172a";
+            const carFilter = isHighlighted
+              ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
+              : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
+            const isLeader = Boolean(
+              leaderHouseKey && highlightKey && highlightKey === leaderHouseKey
+            );
+            const markerKey = `${highlightKey}-${house.stackIndex}-${house.stackSize}`;
 
-              return (
-                <div
-                  key={`${house.houseKey}-${stackIndex}`}
-                  className="absolute flex flex-col items-center"
-                  style={{
-                    top: "50%",
-                    left: `${house.finalProgress * 100}%`,
-                    transform: `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`,
-                    transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
-                    willChange: "transform",
-                    zIndex: 7,
-                  }}
+            return (
+              <div
+                key={markerKey}
+                className="absolute flex flex-col items-center"
+                style={{
+                  top: `calc(50% + ${laneOffset}px)`,
+                  left: `${house.finalProgress * 100}%`,
+                  transform: "translateX(-50%)",
+                  transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
+                  willChange: "transform",
+                  zIndex: 7,
+                }}
+              >
+                <span
+                  className={`
+                    absolute inline-flex flex-col items-center
+                    ${labelAbove ? "-top-10" : "top-12"}
+                  `}
+                  style={{ zIndex: 10 }}
                 >
                   <span
-                    className={`
-                      absolute inline-flex flex-col items-center
-                      ${labelAbove ? "-top-10" : "top-12"}
-                    `}
-                    style={{ zIndex: 10 }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
+                    style={{
+                      ...PLAYFUL_FONT,
+                      fontSize: "11px",
+                      color: house.color ?? "#0f172a",
+                    }}
                   >
-                    <span
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
-                      style={{
-                        ...PLAYFUL_FONT,
-                        fontSize: "11px",
-                        color: house.color ?? "#0f172a",
-                      }}
-                    >
-                      {house.name}
-                    </span>
-                    <span
-                      className={`
-                        absolute h-2 w-2 border border-slate-200 bg-white
-                        ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
-                      `}
-                    />
+                    {house.name}
                   </span>
-                  <div className="house-car-marker">
-                    <svg
-                      className="house-car-icon h-7 w-7"
-                      viewBox="0 0 24 24"
-                      width="24"
-                      height="24"
-                      style={{ "--car-drop": carFilter }}
-                    >
-                      <Car fill={carColor} stroke={carColor} strokeWidth={1.2} />
-                      {!isLeader ? (
-                        <>
-                          <circle className="beacon red" cx="9" cy="5" r="1.6" />
-                          <circle className="beacon blue" cx="12.5" cy="5" r="1.6" />
-                        </>
-                      ) : (
-                        <circle className="beacon gold" cx="12" cy="5" r="2" />
-                      )}
-                    </svg>
-                  </div>
+                  <span
+                    className={`
+                      absolute h-2 w-2 border border-slate-200 bg-white
+                      ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
+                    `}
+                  />
+                </span>
+                <div className="house-car-marker">
+                  <svg
+                    className="house-car-icon h-7 w-7"
+                    viewBox="0 0 24 24"
+                    width="24"
+                    height="24"
+                    style={{ "--car-drop": carFilter }}
+                  >
+                    <Car fill={carColor} stroke={carColor} strokeWidth={1.2} />
+                    {!isLeader ? (
+                      <>
+                        <circle className="beacon red" cx="9" cy="5" r="1.6" />
+                        <circle className="beacon blue" cx="12.5" cy="5" r="1.6" />
+                      </>
+                    ) : (
+                      <circle className="beacon gold" cx="12" cy="5" r="2" />
+                    )}
+                  </svg>
                 </div>
-              );
-            })
-          )}
-        </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -436,7 +422,7 @@ function ProgressTrack({
         className="absolute"
         style={{
           left: `${clampedTime * 100}%`,
-          top: "-28px",
+          top: "-56px",
           transform: "translateX(-50%)",
           zIndex: 14,
         }}
@@ -476,19 +462,24 @@ function ProgressTrack({
           zIndex: 5,
         }}
       />
-      <img
-        src="/progress/start-car.png"
-        alt="Current position"
+      <div
         className="absolute"
         style={{
           left: `${clampedTime * 100}%`,
           top: "0px",
           transform: "translateX(-50%)",
           width: "84px",
-          zIndex: 14,
+          height: "84px",
           pointerEvents: "none",
+          zIndex: 14,
         }}
-      />
+      >
+        <img
+          src="/progress/start-car.png"
+          alt="Current position"
+          className="start-race-car"
+        />
+      </div>
       <div
         className="absolute bg-slate-300"
         style={{
@@ -536,14 +527,13 @@ function ProgressTrack({
       <div className="relative overflow-visible px-12">
         {renderAboveTrackElements()}
         <div
-          className="absolute bg-slate-300"
+          className="absolute bg-slate-300 start-marker-line"
           style={{
             left: `${clampedTime * 100}%`,
-            top: "-12px",
+            top: "-32px",
             width: "1px",
             height: "220px",
             transform: "translateX(-50%)",
-            zIndex: 12,
           }}
         />
         <div className="relative w-full h-[120px] overflow-visible">
