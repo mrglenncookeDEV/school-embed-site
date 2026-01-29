@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Clock, Megaphone } from "lucide-react";
+import { Car, Clock, Megaphone } from "lucide-react";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
 
 const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
@@ -60,6 +60,15 @@ const formatTiedHouseNames = (names = []) => {
 };
 
 const BORDER_FALLBACK_COLOR = "#94a3b8";
+
+const TrafficLights = (props) => (
+  <svg viewBox="0 0 24 48" fill="none" aria-hidden="true" {...props}>
+    <rect x="4" y="2" width="16" height="44" rx="4" fill="#0f172a" />
+    <circle cx="12" cy="12" r="4" fill="#6b7280" />
+    <circle cx="12" cy="24" r="4" fill="#6b7280" />
+    <circle cx="12" cy="36" r="4" fill="#00FF00" />
+  </svg>
+);
 
 const buildBorderStyle = ({
   tieColors = [],
@@ -139,10 +148,9 @@ function ProgressTrack({
   timePillPrimaryColor = "#0f172a",
   timePillTieColors = [],
 }) {
-  const [now, setNow] = useState(Date.now());
-  const ICON_BASELINE_PX = 42;
+  const [now, setNow] = useState(() => Date.now());
+  const TRACK_CENTER_Y = "50%";
   const clampedTime = clamp01(timeProgress);
-  const finishProximity = clamp01((clampedTime - 0.7) / 0.3);
 
   const getWeekdayLabel = () =>
     new Date().toLocaleDateString("en-GB", { weekday: "long" });
@@ -169,7 +177,6 @@ function ProgressTrack({
       ? getDateLabel()
       : null;
 
-  const nearFinish = clampedTime > 0.9;
   const highlightSet = useMemo(
     () => new Set(highlightHouseKeys.filter(Boolean)),
     [highlightHouseKeys]
@@ -282,6 +289,200 @@ function ProgressTrack({
   const STACK_X_GAP = 24;
   const FAN_OUT_DURATION = "320ms";
 
+  const renderTrackZone = () => (
+    <>
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
+        <div className="race-track race-track-kerbs">
+          <div
+            className="race-track-progress"
+            style={{ width: `${clampedTime * 100}%` }}
+          />
+        </div>
+      </div>
+      {finishLabel && (
+        <div
+          className="absolute"
+          style={{
+            left: "100%",
+            top: "8px",
+            transform: "translateX(-50%)",
+            zIndex: 6,
+          }}
+        >
+          <span className="border border-slate-900 bg-slate-100 px-4 py-1 text-xs font-normal text-black whitespace-nowrap rounded-none">
+            {finishLabel}
+          </span>
+        </div>
+      )}
+      <img
+        src="/progress/finish-flag.png"
+        alt="Finish"
+        className="absolute"
+        style={{
+          right: "-36px",
+          top: TRACK_CENTER_Y,
+          transform: "translateY(-50%)",
+          width: "36px",
+          zIndex: 6,
+        }}
+      />
+      <TrafficLights
+        className="absolute"
+        style={{
+          left: "-36px",
+          top: TRACK_CENTER_Y,
+          transform: "translateY(-50%)",
+          width: "28px",
+          height: "28px",
+          color: "#16a34a",
+          fill: "#16a34a",
+          zIndex: 6,
+        }}
+      />
+      <div
+        className="absolute bg-slate-300"
+        style={{
+          left: `${clampedTime * 100}%`,
+          top: "-6px",
+          height: "46px",
+          width: "1px",
+          transform: "translateX(-50%)",
+          zIndex: 4,
+        }}
+      />
+      <div className="absolute inset-0">
+        {disabled && markers.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            {placeholderText || "Waiting for data…"}
+          </div>
+        ) : (
+          markers.map((house) => {
+            const stackIndex = house.stackIndex ?? 0;
+            const stackSize = house.stackSize ?? 1;
+            const mid = (stackSize - 1) / 2;
+            const yOffset =
+              stackSize > 1 ? (stackIndex - mid) * STACK_Y_GAP : 0;
+            const xOffset =
+              stackSize >= 3 ? (stackIndex - mid) * STACK_X_GAP : 0;
+            const labelAbove = stackSize > 1 ? stackIndex % 2 === 0 : false;
+            const highlightKey =
+              house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
+            const isHighlighted = highlightSet.has(highlightKey);
+            const carColor = house.color ?? "#0f172a";
+            const carFilter = isHighlighted
+              ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
+              : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
+
+            return (
+              <div
+                key={`${house.houseKey}-${stackIndex}`}
+                className="absolute flex flex-col items-center"
+                style={{
+                  top: "50%",
+                  left: `${house.finalProgress * 100}%`,
+                  transform: `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`,
+                  transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
+                  willChange: "transform",
+                  zIndex: 7,
+                }}
+              >
+                <span
+                  className={`
+                    absolute inline-flex flex-col items-center
+                    ${labelAbove ? "-top-10" : "top-12"}
+                  `}
+                  style={{ zIndex: 10 }}
+                >
+                  <span
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
+                    style={{
+                      ...PLAYFUL_FONT,
+                      fontSize: "11px",
+                      color: house.color ?? "#0f172a",
+                    }}
+                  >
+                    {house.name}
+                  </span>
+                  <span
+                    className={`
+                      absolute h-2 w-2 border border-slate-200 bg-white
+                      ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
+                    `}
+                  />
+                </span>
+                <Car
+                  className="h-7 w-7"
+                  strokeWidth={1.6}
+                  style={{
+                    color: carColor,
+                    fill: carColor,
+                    filter: carFilter,
+                  }}
+                />
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+
+  const renderAboveTrackElements = () => (
+    timePillLabel ? (
+      <div
+        className="absolute"
+        style={{
+          left: `${clampedTime * 100}%`,
+          top: "-28px",
+          transform: "translateX(-50%)",
+          zIndex: 8,
+        }}
+      >
+        <span
+          className="px-4 py-1 text-xs font-normal text-white shadow-sm whitespace-nowrap rounded-none"
+          style={{ background: timePillBackground }}
+        >
+          {timePillLabel}
+        </span>
+      </div>
+    ) : null
+  );
+
+  const renderBelowTrackElements = () => (
+    <>
+      <img
+        src="/progress/start-car.png"
+        alt="Current position"
+        className="absolute"
+        style={{
+          left: `${clampedTime * 100}%`,
+          top: "0px",
+          transform: "translateX(-50%)",
+          width: "84px",
+          zIndex: 6,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        className="absolute text-[10px] text-slate-500"
+        style={{
+          right: "0px",
+          top: "0px",
+          textAlign: "right",
+          zIndex: 6,
+        }}
+      >
+        <div className="text-[9px] uppercase tracking-wide opacity-60">
+          Countdown
+        </div>
+        <div className="flex items-center gap-1">
+          <Clock className="h-3 w-3 opacity-60" />
+          <span>{formatCountdown(remainingMs)}</span>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div
       className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -294,226 +495,16 @@ function ProgressTrack({
         {title}
       </p>
 
+      {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
-        <div
-          className="
-            absolute inset-x-0 top-1/2 h-3 -translate-y-1/2
-            overflow-visible
-            rounded-full
-            race-track race-track-kerbs
-          "
-        >
-          <div
-            className="race-track-progress"
-            style={{ width: `${clampedTime * 100}%` }}
-          />
-        </div>
-        {timePillLabel && (
-          <div
-            className="absolute"
-            style={{
-              left: `${clampedTime * 100}%`,
-              top: "8px",
-              transform: "translateX(-50%)",
-              zIndex: 6,
-            }}
-          >
-            <span
-              className="px-4 py-1 text-xs font-normal text-white shadow-sm whitespace-nowrap rounded-none"
-              style={{ background: timePillBackground }}
-            >
-              {timePillLabel}
-            </span>
+        <div className="relative overflow-visible px-12">
+          {renderAboveTrackElements()}
+          <div className="relative w-full h-[120px] overflow-visible">
+            {renderTrackZone()}
           </div>
-        )}
-        <span
-          className="absolute pointer-events-none"
-          style={{
-            left: `${clampedTime * 100}%`,
-            transform: "translateX(-50%)",
-            top: "36px",
-            bottom: "24px",
-            width: "2px",
-            background: "none",
-            borderLeft: "1px dashed #0f172a",
-            zIndex: 2,
-          }}
-        />
-        <span
-          className="absolute pointer-events-none"
-          style={{
-            left: "0%",
-            transform: "translateX(-50%)",
-            top: "36px",
-            bottom: "24px",
-            width: "3px",
-            background:
-              "repeating-linear-gradient(to bottom, rgba(148,163,184,0.45), rgba(148,163,184,0.45) 6px, transparent 6px, transparent 12px)",
-            zIndex: 1,
-          }}
-        />
-        <div
-          className="absolute"
-          style={{
-            left: "0%",
-            top: "8px",
-            transform: "translateX(-50%)",
-            zIndex: 6,
-          }}
-        >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-            Start
-          </span>
-        </div>
-        <img
-          src="/progress/start-car.png"
-          alt="Start"
-          className="absolute"
-          style={{
-            left: "0%",
-            bottom: `${ICON_BASELINE_PX}px`,
-            transform: "translateX(-50%)",
-            width: "72px",
-            zIndex: 6,
-            pointerEvents: "none",
-          }}
-        />
-        {finishLabel && (
-          <div
-            className="absolute"
-            style={{
-              left: "100%",
-              top: "8px",
-              transform: "translateX(-50%)",
-              zIndex: 6,
-            }}
-          >
-            <span className="border border-slate-900 bg-slate-100 px-4 py-1 text-xs font-normal text-black whitespace-nowrap rounded-none">
-              {finishLabel}
-            </span>
+          <div className="relative mt-12 h-[56px]">
+            {renderBelowTrackElements()}
           </div>
-        )}
-        <span
-          className="absolute pointer-events-none"
-          style={{
-            left: "100%",
-            transform: "translateX(-50%)",
-            top: "36px",
-            bottom: "24px",
-            width: "3px",
-            background:
-              "repeating-linear-gradient(to bottom, rgba(15,23,42,0.5), rgba(15,23,42,0.5) 6px, transparent 6px, transparent 12px)",
-            opacity: nearFinish ? 0.9 : 0.6,
-            zIndex: 1,
-          }}
-        />
-        <img
-          src="/progress/finish-flag.png"
-          alt="Finish"
-          className="absolute"
-          style={{
-            left: "100%",
-            bottom: `${ICON_BASELINE_PX}px`,
-            transform: "translateX(-50%)",
-            width: "68px",
-            zIndex: 6,
-            pointerEvents: "none",
-            filter: `
-              drop-shadow(0 0 ${6 + finishProximity * 10}px rgba(250,204,21,${0.3 + finishProximity * 0.4}))
-              drop-shadow(0 6px ${14 + finishProximity * 12}px rgba(161,98,7,${0.35 + finishProximity * 0.4}))
-            `,
-            transition: "filter 300ms ease-out",
-          }}
-        />
-        {/* TIMER UX RULE:
-            This timer must be small, single-line, and secondary.
-            Do not enlarge, stack, or stylise further. */}
-        <div
-          className="absolute flex items-center gap-1 text-[10px] text-slate-500"
-          style={{
-            left: "100%",
-            bottom: `${ICON_BASELINE_PX - 30}px`,
-            transform: "translateX(-50%)",
-            zIndex: 5,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <Clock className="h-3 w-3 opacity-60" />
-          <span>{formatCountdown(remainingMs)}</span>
-        </div>
-        <div className="absolute inset-0">
-          {disabled && markers.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              {placeholderText || "Waiting for data…"}
-            </div>
-          ) : (
-            markers.map((house) => {
-              const Icon = house.icon;
-              const stackIndex = house.stackIndex ?? 0;
-              const stackSize = house.stackSize ?? 1;
-              const mid = (stackSize - 1) / 2;
-              const yOffset =
-                stackSize > 1 ? (stackIndex - mid) * STACK_Y_GAP : 0;
-              const xOffset =
-                stackSize >= 3 ? (stackIndex - mid) * STACK_X_GAP : 0;
-              const labelAbove = stackSize > 1 ? stackIndex % 2 === 0 : false;
-              const highlightKey =
-                house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
-              const isHighlighted = highlightSet.has(highlightKey);
-              const avatarStyle = {
-                backgroundColor: house.color || "#2563eb",
-                boxShadow: isHighlighted
-                  ? "0 0 0 6px rgba(250,204,21,0.25)"
-                  : undefined,
-              };
-
-              return (
-                <div
-                  key={`${house.houseKey}-${stackIndex}`}
-                  className="absolute top-1/2 flex flex-col items-center"
-                  style={{
-                    top: "50%",
-                    left: `${house.finalProgress * 100}%`,
-                    transform: `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`,
-                    transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
-                    willChange: "transform",
-                    zIndex: 7,
-                  }}
-                >
-                    <span
-                      className={`
-                        absolute inline-flex flex-col items-center
-                        ${labelAbove ? "-top-10" : "top-12"}
-                      `}
-                    >
-                      <span
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
-                        style={{
-                          ...PLAYFUL_FONT,
-                          fontSize: "11px",
-                          color: house.color ?? "#0f172a",
-                        }}
-                      >
-                        {house.name}
-                      </span>
-                      <span
-                        className={`
-                          absolute h-2 w-2 border border-slate-200 bg-white
-                          ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
-                        `}
-                      />
-                    </span>
-                    <div
-                      className="flex h-10 w-10 items-center justify-center rounded-full shadow-md ring-2 ring-white"
-                      style={avatarStyle}
-                    >
-                      {Icon ? <Icon className="h-5 w-5 text-white" /> : null}
-                    </div>
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
       {footer && (
