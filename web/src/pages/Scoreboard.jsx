@@ -16,9 +16,12 @@ const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
 
 const PLAYFUL_FONT = {
   fontFamily:
-    '"Comic Sans MS", "Comic Neue", "Permanent Marker", "Luckiest Guy", cursive',
-  fontWeight: 700,
+    '"Permanent Marker", "Marker Felt", "Kalam", cursive',
+  fontWeight: 200,
+  letterSpacing: "0.04em",
 };
+
+
 
 const WEEK_TITLE_COLOR = "#0ea5e9";
 const TERM_TITLE_COLOR = "#be185d";
@@ -119,10 +122,20 @@ const buildAccentBackground = (primaryColor = "#2563eb", tieColors = []) => {
   return unique[0] ?? primaryColor;
 };
 
-const clamp01 = (value) => {
+const clamp = (value, min = 0, max = 1) => {
   const num = Number(value ?? 0);
-  if (Number.isNaN(num)) return 0;
-  return Math.min(1, Math.max(0, num));
+  if (Number.isNaN(num)) return min;
+  return Math.min(max, Math.max(min, num));
+};
+
+const clamp01 = (value) => clamp(value, 0, 1);
+
+const getWeekProgress = (now = new Date()) => {
+  const day = now.getDay(); // Sunday = 0
+  const weekdayIndex = Math.max(0, Math.min(4, day - 1));
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const dayFraction = minutes / (24 * 60);
+  return (weekdayIndex + dayFraction) / 5;
 };
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -147,6 +160,7 @@ function ProgressTrack({
   highlightHouseKeys = [],
   timePillPrimaryColor = "#0f172a",
   timePillTieColors = [],
+  leaderHouseKey = null,
 }) {
   const [now, setNow] = useState(() => Date.now());
   const TRACK_CENTER_Y = "50%";
@@ -290,115 +304,130 @@ function ProgressTrack({
   const FAN_OUT_DURATION = "320ms";
 
   const renderTrackZone = () => (
-    <>
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-        <div className="race-track race-track-kerbs">
-          <div
-            className="race-track-progress"
-            style={{ width: `${clampedTime * 100}%` }}
-          />
-        </div>
-      </div>
-      <img
-        src="/progress/finish-flag.png"
-        alt="Finish"
-        className="absolute"
-        style={{
-          right: "-36px",
-          top: TRACK_CENTER_Y,
-          transform: "translateY(-50%)",
-          width: "48px",
-          zIndex: 6,
-        }}
-      />
-      <TrafficLights
-        className="absolute"
-        style={{
-          left: "-36px",
-          top: TRACK_CENTER_Y,
-          width: "56px",
-          height: "56px",
-          color: "#22c55e",
-          fill: "#22c55e",
-          zIndex: 6,
-          transform: "translate(-50%, -50%)",
-        }}
-      />
-      <div className="absolute inset-0">
-        {disabled && markers.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500">
-            {placeholderText || "Waiting for data…"}
+    <div className="track-outer">
+      <div className="track-inner">
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
+          <div className="race-track track-tarmac race-track-kerbs">
+            <div
+              className="race-track-progress"
+              style={{ width: `${clampedTime * 100}%` }}
+            />
           </div>
-        ) : (
-          markers.map((house) => {
-            const stackIndex = house.stackIndex ?? 0;
-            const stackSize = house.stackSize ?? 1;
-            const mid = (stackSize - 1) / 2;
-            const yOffset =
-              stackSize > 1 ? (stackIndex - mid) * STACK_Y_GAP : 0;
-            const xOffset =
-              stackSize >= 3 ? (stackIndex - mid) * STACK_X_GAP : 0;
-            const labelAbove = stackSize > 1 ? stackIndex % 2 === 0 : false;
-            const highlightKey =
-              house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
-            const isHighlighted = highlightSet.has(highlightKey);
-            const carColor = house.color ?? "#0f172a";
-            const carFilter = isHighlighted
-              ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
-              : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
+        </div>
+        <img
+          src="/progress/finish-flag.png"
+          alt="Finish"
+          className="absolute"
+          style={{
+            right: "-36px",
+            top: TRACK_CENTER_Y,
+            transform: "translateY(-50%)",
+            width: "48px",
+            zIndex: 6,
+          }}
+        />
+        <TrafficLights
+          className="absolute"
+          style={{
+            left: "-36px",
+            top: TRACK_CENTER_Y,
+            width: "56px",
+            height: "56px",
+            color: "#22c55e",
+            fill: "#22c55e",
+            zIndex: 6,
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+        <div className="absolute inset-0">
+          {disabled && markers.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              {placeholderText || "Waiting for data…"}
+            </div>
+          ) : (
+            markers.map((house) => {
+              const stackIndex = house.stackIndex ?? 0;
+              const stackSize = house.stackSize ?? 1;
+              const mid = (stackSize - 1) / 2;
+              const yOffset =
+                stackSize > 1 ? (stackIndex - mid) * STACK_Y_GAP : 0;
+              const xOffset =
+                stackSize >= 3 ? (stackIndex - mid) * STACK_X_GAP : 0;
+              const labelAbove = stackSize > 1 ? stackIndex % 2 === 0 : false;
+              const highlightKey =
+                house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
+              const isHighlighted = highlightSet.has(highlightKey);
+              const carColor = house.color ?? "#0f172a";
+              const carFilter = isHighlighted
+                ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
+                : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
+              const isLeader = Boolean(
+                leaderHouseKey && highlightKey && highlightKey === leaderHouseKey
+              );
 
-            return (
-              <div
-                key={`${house.houseKey}-${stackIndex}`}
-                className="absolute flex flex-col items-center"
-                style={{
-                  top: "50%",
-                  left: `${house.finalProgress * 100}%`,
-                  transform: `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`,
-                  transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
-                  willChange: "transform",
-                  zIndex: 7,
-                }}
-              >
-                <span
-                  className={`
-                    absolute inline-flex flex-col items-center
-                    ${labelAbove ? "-top-10" : "top-12"}
-                  `}
-                  style={{ zIndex: 10 }}
+              return (
+                <div
+                  key={`${house.houseKey}-${stackIndex}`}
+                  className="absolute flex flex-col items-center"
+                  style={{
+                    top: "50%",
+                    left: `${house.finalProgress * 100}%`,
+                    transform: `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`,
+                    transition: `transform ${FAN_OUT_DURATION} cubic-bezier(0.34, 1.56, 0.64, 1)`,
+                    willChange: "transform",
+                    zIndex: 7,
+                  }}
                 >
                   <span
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
-                    style={{
-                      ...PLAYFUL_FONT,
-                      fontSize: "11px",
-                      color: house.color ?? "#0f172a",
-                    }}
-                  >
-                    {house.name}
-                  </span>
-                  <span
                     className={`
-                      absolute h-2 w-2 border border-slate-200 bg-white
-                      ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
+                      absolute inline-flex flex-col items-center
+                      ${labelAbove ? "-top-10" : "top-12"}
                     `}
-                  />
-                </span>
-                <Car
-                  className="h-7 w-7"
-                  strokeWidth={1.6}
-                  style={{
-                    color: carColor,
-                    fill: carColor,
-                    filter: carFilter,
-                  }}
-                />
-              </div>
-            );
-          })
-        )}
+                    style={{ zIndex: 10 }}
+                  >
+                    <span
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
+                      style={{
+                        ...PLAYFUL_FONT,
+                        fontSize: "11px",
+                        color: house.color ?? "#0f172a",
+                      }}
+                    >
+                      {house.name}
+                    </span>
+                    <span
+                      className={`
+                        absolute h-2 w-2 border border-slate-200 bg-white
+                        ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
+                      `}
+                    />
+                  </span>
+                  <div className="house-car-marker">
+                    <svg
+                      className="house-car-icon h-7 w-7"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      style={{ "--car-drop": carFilter }}
+                    >
+                      <Car fill={carColor} stroke={carColor} strokeWidth={1.2} />
+                      {!isLeader ? (
+                        <>
+                          <circle className="beacon red" cx="9" cy="5" r="1.6" />
+                          <circle className="beacon blue" cx="12.5" cy="5" r="1.6" />
+                        </>
+                      ) : (
+                        <circle className="beacon gold" cx="12" cy="5" r="2" />
+                      )}
+                    </svg>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 
   const renderAboveTrackElements = () => (
@@ -495,12 +524,12 @@ function ProgressTrack({
       className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
       style={borderStyle}
     >
-      <p
-        className="mb-3 text-xs font-semibold uppercase tracking-[0.4em]"
+      <h2
+        className="highlight-title mb-3 text-lg font-semibold uppercase tracking-[0.4em]"
         style={{ ...PLAYFUL_FONT, color: titleColor }}
       >
         {title}
-      </p>
+      </h2>
 
       {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
@@ -518,7 +547,7 @@ function ProgressTrack({
           }}
         />
         <div className="relative w-full h-[120px] overflow-visible">
-          {renderTrackZone()}
+        {renderTrackZone()}
         </div>
         <div className="relative mt-12 h-[56px]">
           {renderBelowTrackElements()}
@@ -862,14 +891,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     [termRows]
   );
 
-  const weekTimeProgress = useMemo(() => {
-    const rawStart = scoreboard.week?.week_start ?? scoreboard.week?.weekStart;
-    if (!rawStart) return 0;
-    const start = Date.parse(rawStart);
-    if (Number.isNaN(start)) return 0;
-    const weekEnd = start + 7 * 24 * 60 * 60 * 1000;
-    return clamp01((Date.now() - start) / (weekEnd - start));
-  }, [scoreboard.week]);
+  const weekTimeProgress = clamp(getWeekProgress());
 
   const termTimeProgress = useMemo(() => {
     const term = scoreboard.term;
@@ -1234,14 +1256,14 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           style={weekCardBorderStyle}
         >
           <div className="mb-4 space-y-1">
-            <p
-              className="text-xs uppercase tracking-[0.4em]"
+            <h2
+              className="highlight-title text-lg uppercase tracking-[0.4em]"
               style={{ ...PLAYFUL_FONT, color: WEEK_TITLE_COLOR }}
             >
               Current Week
-            </p>
+            </h2>
             {weekRangeLabel && (
-            <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
+              <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
             )}
           </div>
           <div
@@ -1291,12 +1313,12 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           style={termCardBorderStyle}
         >
           <div className="mb-4 space-y-1">
-            <p
-              className="text-xs uppercase tracking-[0.4em]"
+            <h2
+              className="highlight-title text-lg uppercase tracking-[0.4em]"
               style={{ ...PLAYFUL_FONT, color: TERM_TITLE_COLOR }}
             >
               Current Term
-            </p>
+            </h2>
             {termSubtitle && (
               <p className="text-sm font-semibold text-slate-700">{termSubtitle}</p>
             )}
@@ -1347,7 +1369,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
       <div className="space-y-4">
         <ProgressTrack
-          title="Current Week Progress"
+          title="RACE FOR THE WEEK!"
           rows={weekRows}
           timeProgress={weekTimeProgress}
           placeholderText="Week data unavailable"
@@ -1359,9 +1381,10 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           footer={leadingHouseFooter}
           titleColor={WEEK_TITLE_COLOR}
           borderStyle={weekTrackBorderStyle}
+          leaderHouseKey={weekLeadingHouseKey}
         />
         <ProgressTrack
-          title="Current Term Progress"
+          title="RACE FOR THE TERM!!!"
           rows={termRows}
           timeProgress={termTimeProgress}
           disabled={termDisabled}
@@ -1375,6 +1398,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           timePillTieColors={termTieColors}
           footer={termLeadingHouseFooter}
           termEndDate={termEndDate}
+          leaderHouseKey={termLeadingHouseKey}
         />
       </div>
 
@@ -1384,9 +1408,12 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
             className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
             style={{ backgroundColor: WEEK_TITLE_COLOR }}
           >
-            <p className="text-xs uppercase tracking-[0.4em]" style={PLAYFUL_FONT}>
+            <h2
+              className="highlight-title text-lg uppercase tracking-[0.4em]"
+              style={PLAYFUL_FONT}
+            >
               This week total
-            </p>
+            </h2>
             <p className="text-4xl font-semibold" style={PLAYFUL_FONT}>
               {thisWeekTotal} pts
             </p>
@@ -1396,11 +1423,14 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           </div>
           <div
             className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
-            style={{ backgroundColor: TERM_TITLE_COLOR }}
+            style={{ backgroundColor: "#dc2626" }}
           >
-            <p className="text-xs uppercase tracking-[0.4em]" style={PLAYFUL_FONT}>
+            <h2
+              className="highlight-title text-lg uppercase tracking-[0.4em]"
+              style={PLAYFUL_FONT}
+            >
               Current Term Total
-            </p>
+            </h2>
             <p className="text-3xl font-semibold" style={PLAYFUL_FONT}>
               {termTotalPoints} pts
             </p>
@@ -1415,7 +1445,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-red-500">Missing submissions</p>
+            <h2 className="highlight-title text-lg uppercase tracking-[0.4em] text-red-500">
+                Missing submissions
+              </h2>
               <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
             </div>
             <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
