@@ -299,21 +299,6 @@ function ProgressTrack({
           />
         </div>
       </div>
-      {finishLabel && (
-        <div
-          className="absolute"
-          style={{
-            left: "100%",
-            top: "8px",
-            transform: "translateX(-50%)",
-            zIndex: 6,
-          }}
-        >
-          <span className="border border-slate-900 bg-slate-100 px-4 py-1 text-xs font-normal text-black whitespace-nowrap rounded-none">
-            {finishLabel}
-          </span>
-        </div>
-      )}
       <img
         src="/progress/finish-flag.png"
         alt="Finish"
@@ -322,7 +307,7 @@ function ProgressTrack({
           right: "-36px",
           top: TRACK_CENTER_Y,
           transform: "translateY(-50%)",
-          width: "36px",
+          width: "48px",
           zIndex: 6,
         }}
       />
@@ -331,23 +316,12 @@ function ProgressTrack({
         style={{
           left: "-36px",
           top: TRACK_CENTER_Y,
-          transform: "translateY(-50%)",
-          width: "28px",
-          height: "28px",
-          color: "#16a34a",
-          fill: "#16a34a",
+          width: "56px",
+          height: "56px",
+          color: "#22c55e",
+          fill: "#22c55e",
           zIndex: 6,
-        }}
-      />
-      <div
-        className="absolute bg-slate-300"
-        style={{
-          left: `${clampedTime * 100}%`,
-          top: "-6px",
-          height: "46px",
-          width: "1px",
-          transform: "translateX(-50%)",
-          zIndex: 4,
+          transform: "translate(-50%, -50%)",
         }}
       />
       <div className="absolute inset-0">
@@ -435,7 +409,7 @@ function ProgressTrack({
           left: `${clampedTime * 100}%`,
           top: "-28px",
           transform: "translateX(-50%)",
-          zIndex: 8,
+          zIndex: 14,
         }}
       >
         <span
@@ -450,6 +424,29 @@ function ProgressTrack({
 
   const renderBelowTrackElements = () => (
     <>
+      <div
+        className="absolute flex items-center justify-center rounded-full bg-[#22c55e] text-white text-[10px] border border-slate-950"
+        style={{
+          left: "-36px",
+          top: "4px",
+          transform: "translateX(-50%)",
+          width: "28px",
+          height: "28px",
+          zIndex: 14,
+        }}
+      >
+        GO
+      </div>
+      <div
+        className="absolute bg-slate-300"
+        style={{
+          left: "-22px",
+          top: "28px",
+          width: `calc(${clampedTime * 100}% + 22px)`,
+          height: "1px",
+          zIndex: 5,
+        }}
+      />
       <img
         src="/progress/start-car.png"
         alt="Current position"
@@ -459,8 +456,18 @@ function ProgressTrack({
           top: "0px",
           transform: "translateX(-50%)",
           width: "84px",
-          zIndex: 6,
+          zIndex: 14,
           pointerEvents: "none",
+        }}
+      />
+      <div
+        className="absolute bg-slate-300"
+        style={{
+          left: `${clampedTime * 100}%`,
+          top: "28px",
+          width: `calc(100% - ${clampedTime * 100}% - 32px)`,
+          height: "1px",
+          zIndex: 5,
         }}
       />
       <div
@@ -497,15 +504,26 @@ function ProgressTrack({
 
       {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
-        <div className="relative overflow-visible px-12">
-          {renderAboveTrackElements()}
-          <div className="relative w-full h-[120px] overflow-visible">
-            {renderTrackZone()}
-          </div>
-          <div className="relative mt-12 h-[56px]">
-            {renderBelowTrackElements()}
-          </div>
+      <div className="relative overflow-visible px-12">
+        {renderAboveTrackElements()}
+        <div
+          className="absolute bg-slate-300"
+          style={{
+            left: `${clampedTime * 100}%`,
+            top: "-12px",
+            width: "1px",
+            height: "220px",
+            transform: "translateX(-50%)",
+            zIndex: 12,
+          }}
+        />
+        <div className="relative w-full h-[120px] overflow-visible">
+          {renderTrackZone()}
         </div>
+        <div className="relative mt-12 h-[56px]">
+          {renderBelowTrackElements()}
+        </div>
+      </div>
       </div>
       {footer && (
         <div className="mt-4 border-t border-slate-100 pt-4 flex justify-end">
