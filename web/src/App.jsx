@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter as Router, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Admin from "./pages/Admin";
 import EmbedScoreboard from "./pages/EmbedScoreboard";
 import Scoreboard from "./pages/Scoreboard";
@@ -66,16 +66,17 @@ function AppContent() {
     setEditingEntry(entry);
     setTeacherModalOpen(true);
   }, []);
+  const navigate = useNavigate();
   const closeTeacherSubmit = useCallback(() => {
     setTeacherModalOpen(false);
     setEditingEntry(null);
-  }, []);
+    navigate("/scoreboard");
+  }, [navigate]);
 
   const navItems = [
     { label: "Scoreboard", to: "/", end: true },
     { label: "Submit Points", action: () => openTeacherSubmit(null) },
     { label: "Admin", to: "/admin" },
-    { label: "Embed", to: "/embed/scoreboard" },
   ];
   useEffect(() => {
     if (location.pathname === "/teacher") {
@@ -166,7 +167,7 @@ function AppContent() {
         </Routes>
       </main>
       <SlideUpModal open={isTeacherModalOpen} onClose={closeTeacherSubmit}>
-        <TeacherSubmit entry={editingEntry} />
+        <TeacherSubmit entry={editingEntry} onSuccess={closeTeacherSubmit} />
       </SlideUpModal>
     </div>
   );

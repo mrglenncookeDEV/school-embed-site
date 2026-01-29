@@ -9,6 +9,7 @@ export default function Admin() {
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [activeTab, setActiveTab] = useState("entries");
 
   const loadEntries = async () => {
@@ -50,11 +51,6 @@ export default function Admin() {
   }, []);
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm("Delete this entry permanently?");
-    if (!confirmed) {
-      return;
-    }
-
     setDeletingId(id);
     try {
       const response = await fetch(`/api/entries/${id}?actorEmail=admin@school.local`, {
@@ -71,7 +67,12 @@ export default function Admin() {
       setActionMessage(err.message);
     } finally {
       setDeletingId(null);
+      setConfirmDeleteId(null);
     }
+  };
+
+  const requestDelete = (id) => {
+    setConfirmDeleteId(id);
   };
 
   const openTeacherSubmitModalForEntry = (entry) => {
@@ -189,7 +190,7 @@ export default function Admin() {
                           </button>
                           <button
                             disabled={deletingId === entry.id}
-                            onClick={() => handleDelete(entry.id)}
+                            onClick={() => requestDelete(entry.id)}
                             className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 transition hover:text-rose-400 disabled:text-slate-400"
                           >
                             {deletingId === entry.id ? "Deleting…" : "Delete"}
@@ -257,6 +258,7 @@ export default function Admin() {
             "Manage Houses",
             "Manage Pupils",
             "Manage Users",
+            "Manage Term Dates",
             "Advanced Settings",
           ].map((title) => (
             <div
@@ -285,6 +287,34 @@ export default function Admin() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 text-left shadow-2xl dark:bg-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              Mrs Cooke wants to check
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+              Delete this entry permanently?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-slate-600 transition hover:border-slate-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(confirmDeleteId)}
+                className="rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-rose-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -199,19 +199,6 @@ body {
   z-index: 3;
 }
 
-input[type="number"] {
-  appearance: auto;
-  -moz-appearance: auto;
-}
-
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  opacity: 1;
-  visibility: visible;
-  -webkit-appearance: auto;
-  appearance: auto;
-}
-
 .track-center-fade {
   position: absolute;
   left: 0;

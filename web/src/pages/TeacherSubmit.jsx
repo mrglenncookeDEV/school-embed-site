@@ -16,7 +16,7 @@ const initialForm = {
   submittedByEmail: "",
 };
 
-export default function TeacherSubmit({ entry } = {}) {
+export default function TeacherSubmit({ entry, onSuccess } = {}) {
   const [form, setForm] = useState(initialForm);
   const [classes, setClasses] = useState([]);
   const [houses, setHouses] = useState([]);
@@ -98,12 +98,14 @@ export default function TeacherSubmit({ entry } = {}) {
     };
   }, []);
 
+  const numericPoints = Number(form.points);
   const isSubmitting = status.type === "loading";
   const submitDisabled =
     isSubmitting ||
     !form.classId ||
     !form.houseId ||
-    form.points === "" ||
+    Number.isNaN(numericPoints) ||
+    numericPoints <= 0 ||
     !form.submittedByEmail;
 
   const handleSubmit = async (event) => {
@@ -135,6 +137,9 @@ export default function TeacherSubmit({ entry } = {}) {
       setAwardCategory("General Award");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("scoreboard:refresh"));
+      }
+      if (typeof onSuccess === "function") {
+        onSuccess();
       }
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -249,14 +254,14 @@ export default function TeacherSubmit({ entry } = {}) {
                 <label className="text-sm font-medium text-slate-700">Points</label>
                 <input
                   type="number"
-                  min="0"
+                  min="1"
                   max="500"
                   step="1"
                   value={form.points}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, points: event.target.value }))
                   }
-                  className="border rounded-md px-3 py-2 bg-sky-600 dark:bg-slate-900 text-slate-100 text-center w-full max-w-[120px] md:max-w-[140px] mx-auto md:mx-0 appearance-auto"
+                  className="border rounded-md px-3 py-2 bg-slate-50 text-slate-900 text-center w-full max-w-[120px] md:max-w-[140px] mx-auto md:mx-0"
                   required
                 />
               </div>
