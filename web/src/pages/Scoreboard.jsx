@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Car, Clock, Megaphone } from "lucide-react";
+import { Timer, Megaphone } from "lucide-react";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
 
 const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
@@ -63,15 +63,6 @@ const formatTiedHouseNames = (names = []) => {
 };
 
 const BORDER_FALLBACK_COLOR = "#94a3b8";
-
-const TrafficLights = (props) => (
-  <svg viewBox="0 0 24 48" fill="none" aria-hidden="true" {...props}>
-    <rect x="4" y="2" width="16" height="44" rx="4" fill="#0f172a" />
-    <circle cx="12" cy="12" r="4" fill="#6b7280" />
-    <circle cx="12" cy="24" r="4" fill="#6b7280" />
-    <circle cx="12" cy="36" r="4" fill="#00FF00" />
-  </svg>
-);
 
 const buildBorderStyle = ({
   tieColors = [],
@@ -258,6 +249,56 @@ function ProgressTrack({
     return Math.max(0, ...effectiveRows.map((r) => Number(r.points ?? 0)));
   }, [disabled, effectiveRows]);
 
+  const POSITION_COLORS = {
+    1: "#facc15",
+    2: "#c0c0c0",
+    3: "#b87333",
+    4: "#0f172a",
+  };
+
+  const getHouseMarkerKey = (house) =>
+    house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
+
+  const positionColorByHouseKey = useMemo(() => {
+    if (disabled) {
+      return {};
+    }
+
+    const ordered = [...effectiveRows].sort((a, b) => {
+      const pointsA = Number(a.points ?? 0);
+      const pointsB = Number(b.points ?? 0);
+      if (pointsA !== pointsB) {
+        return pointsB - pointsA;
+      }
+      const nameA = (a.name ?? "").toString();
+      const nameB = (b.name ?? "").toString();
+      return nameA.localeCompare(nameB);
+    });
+
+    const pointsToPosition = {};
+    let nextPosition = 1;
+    let previousPoints = null;
+    ordered.forEach((row) => {
+      const points = Number(row.points ?? 0);
+      if (points !== previousPoints) {
+        pointsToPosition[points] = nextPosition;
+      }
+      previousPoints = points;
+      nextPosition += 1;
+    });
+
+    const result = {};
+    ordered.forEach((row) => {
+      const key = getHouseMarkerKey(row);
+      const points = Number(row.points ?? 0);
+      const position = pointsToPosition[points] ?? nextPosition - 1;
+      const borderColor = POSITION_COLORS[position] ?? POSITION_COLORS[4];
+      result[key] = { position, borderColor };
+    });
+
+    return result;
+  }, [disabled, effectiveRows]);
+
   const markers = useMemo(() => {
     if (disabled) return [];
 
@@ -291,45 +332,93 @@ function ProgressTrack({
   const FAN_OUT_DURATION = "320ms";
 
   const renderTrackZone = () => (
-    <div className="track-wrapper">
-      <div className="track-road">
+    <div
+      className="track-wrapper"
+      style={{
+        marginLeft: "-40px",
+        marginRight: "-40px",
+        width: "calc(100% + 80px)",
+        padding: 0,
+      }}
+    >
+      <div className="track-road" style={{ height: "170px" }}>
         <div className="track-kerb top" />
         <div className="track-kerb bottom" />
-        <div className="track-tarmac" />
-        <div className="track-grain" />
-        <div className="track-center-line" />
         <div
-          className="track-center-fade"
-          style={{ "--progress-percent": `${clampedTime * 100}%` }}
+          className="absolute inset-0"
+          style={{
+            background: "#000000",
+          }}
+        >
+          <div
+            className="absolute inset-0 pointer-events-none opacity-20"
+            style={{
+              backgroundImage:
+                "radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)",
+              backgroundSize: "3px 3px",
+            }}
+          />
+        </div>
+        {/* edge fade */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 8%)",
+            opacity: 0.5,
+            zIndex: 2,
+          }}
         />
+        <div
+          className="absolute top-0 bottom-0 left-0 pointer-events-none"
+          style={{
+            width: "60px",
+            backgroundImage: "repeating-linear-gradient(to bottom, rgba(255,255,255,0.5) 0 2px, transparent 2px 40px)",
+            borderRight: "4px solid rgba(255,255,255,0.8)",
+            zIndex: 2,
+            opacity: 0.5,
+          }}
+        />
+        <div
+          className="absolute top-0 bottom-0 flex items-center pointer-events-none"
+          style={{
+            left: "70px",
+            zIndex: 1,
+          }}
+        >
+          <span
+            style={{
+              transform: "rotate(90deg)",
+              color: "rgba(255,255,255,0.4)",
+              fontSize: "24px",
+              fontWeight: "900",
+              letterSpacing: "0.3em",
+              fontFamily: "system-ui, sans-serif",
+              whiteSpace: "nowrap",
+            }}
+          >
+            START
+          </span>
+        </div>
+        <div
+          className="absolute top-0 bottom-0 right-0 pointer-events-none"
+          style={{
+            width: "60px",
+            backgroundImage: "repeating-conic-gradient(#334155 0% 25%, #ffffff 0% 50%)",
+            backgroundSize: "10px 10px",
+            zIndex: 2,
+            opacity: 0.8,
+          }}
+        />
+        <div className="absolute inset-0 mx-10">
+          <div
+            className="track-center-fade"
+            style={{ "--progress-percent": `${clampedTime * 100}%` }}
+          />
+        </div>
       </div>
 
-      <img
-        src="/progress/finish-flag.png"
-        alt="Finish"
-        className="absolute"
-        style={{
-          right: "-36px",
-          top: TRACK_CENTER_Y,
-          transform: "translateY(-50%)",
-          width: "48px",
-          zIndex: 6,
-        }}
-      />
-      <TrafficLights
-        className="absolute"
-        style={{
-          left: "-36px",
-          top: TRACK_CENTER_Y,
-          width: "56px",
-          height: "56px",
-          color: "#22c55e",
-          fill: "#22c55e",
-          zIndex: 6,
-          transform: "translate(-50%, -50%)",
-        }}
-      />
-      <div className="house-cars absolute inset-0">
+      <div className="house-cars absolute inset-0 mx-10">
         {disabled && markers.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-500">
             {placeholderText || "Waiting for data…"}
@@ -343,16 +432,21 @@ function ProgressTrack({
                 : laneOffset < 0;
             const highlightKey =
               house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
+            const canonicalKey = resolveHouseKey(highlightKey);
+            const houseMeta = HOUSES[canonicalKey] ?? {};
+            const HouseIcon = houseMeta.icon;
             const isHighlighted = highlightSet.has(highlightKey);
-            const carColor = house.color ?? "#0f172a";
-            const isLeader = Boolean(
-              leaderHouseKey && highlightKey && highlightKey === leaderHouseKey
-            );
-            const carFilter =
-              isHighlighted && !isLeader
+            const badgeShadow =
+              isHighlighted
                 ? "drop-shadow(0 0 10px rgba(250,204,21,0.75)) drop-shadow(0 4px 8px rgba(0,0,0,0.35))"
                 : "drop-shadow(0 4px 12px rgba(0,0,0,0.4))";
             const markerKey = `${highlightKey}-${house.stackIndex}-${house.stackSize}`;
+            const houseColor = house.color ?? houseMeta.color ?? "#0f172a";
+            const rankInfo =
+              positionColorByHouseKey[highlightKey] ??
+              positionColorByHouseKey[canonicalKey] ?? { borderColor: POSITION_COLORS[4] };
+            const borderColor = rankInfo.borderColor;
+            const pointsLabel = `${house.points ?? 0} pts`;
 
             return (
               <div
@@ -370,7 +464,7 @@ function ProgressTrack({
                 <span
                   className={`
                     absolute inline-flex flex-col items-center
-                    ${labelAbove ? "-top-10" : "top-12"}
+                    ${labelAbove ? "-top-10" : "top-16"}
                   `}
                   style={{ zIndex: 10 }}
                 >
@@ -379,10 +473,10 @@ function ProgressTrack({
                     style={{
                       ...PLAYFUL_FONT,
                       fontSize: "11px",
-                      color: house.color ?? "#0f172a",
+                      color: houseColor,
                     }}
                   >
-                    {house.name}
+                    {house.name} — {pointsLabel}
                   </span>
                   <span
                     className={`
@@ -391,24 +485,27 @@ function ProgressTrack({
                     `}
                   />
                 </span>
-                <div className="house-car-marker">
-                  <svg
-                    className="house-car-icon h-7 w-7"
-                    viewBox="0 0 24 24"
-                    width="24"
-                    height="24"
-                    style={{ "--car-drop": carFilter }}
-                  >
-                    <Car fill={carColor} stroke={carColor} strokeWidth={1.2} />
-                    {!isLeader ? (
-                      <>
-                        <circle className="beacon red" cx="9" cy="5" r="1.6" />
-                        <circle className="beacon blue" cx="12.5" cy="5" r="1.6" />
-                      </>
-                    ) : (
-                      <circle className="beacon gold" cx="12" cy="5" r="2" />
-                    )}
-                  </svg>
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-full shadow-lg md:h-10 md:w-10 flex-shrink-0"
+                  style={{
+                    backgroundColor: houseColor,
+                    borderColor,
+                    borderWidth: "3px",
+                    borderStyle: "solid",
+                    filter: badgeShadow,
+                  }}
+                >
+                  {HouseIcon ? (
+                    <HouseIcon
+                      className="h-4 w-4 text-white"
+                      strokeWidth={1.5}
+                      style={{ color: "#fff" }}
+                    />
+                  ) : (
+                    <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white">
+                      {house.name?.[0] ?? "?"}
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -442,73 +539,26 @@ function ProgressTrack({
   const renderBelowTrackElements = () => (
     <>
       <div
-        className="absolute flex items-center justify-center rounded-full bg-[#22c55e] text-white text-[10px] border border-slate-950"
-        style={{
-          left: "-36px",
-          top: "4px",
-          transform: "translateX(-50%)",
-          width: "28px",
-          height: "28px",
-          zIndex: 14,
-        }}
-      >
-        GO
-      </div>
-      <div
-        className="absolute bg-slate-300"
-        style={{
-          left: "-22px",
-          top: "28px",
-          width: `calc(${clampedTime * 100}% + 22px)`,
-          height: "1px",
-          zIndex: 5,
-        }}
-      />
-      <div
-        className="absolute"
+        className="absolute flex flex-col items-center"
         style={{
           left: `${clampedTime * 100}%`,
           top: "0px",
           transform: "translateX(-50%)",
-          width: "84px",
-          height: "84px",
+          zIndex: 14,
           pointerEvents: "none",
-          zIndex: 14,
         }}
       >
-        <img
-          src="/progress/start-car.png"
-          alt="Current position"
-          className="start-race-car"
-        />
-      </div>
-      <div
-        className="absolute bg-slate-300"
-        style={{
-          left: `${clampedTime * 100}%`,
-          top: "28px",
-          width: `calc(100% - ${clampedTime * 100}% - 32px)`,
-          height: "1px",
-          zIndex: 5,
-        }}
-      />
-      <div
-        className="absolute text-[10px] text-slate-500"
-        style={{
-          right: "0px",
-          top: "0px",
-          textAlign: "right",
-          zIndex: 6,
-        }}
-      >
-        <div className="text-[9px] uppercase tracking-wide opacity-60">
-          Countdown
+        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1 shadow-sm backdrop-blur-sm">
+          <Timer className="h-3.5 w-3.5 text-slate-500" />
+          <span className="text-xs font-bold text-slate-700 tabular-nums tracking-tight">
+            {formatCountdown(remainingMs)}
+          </span>
         </div>
-        <div className="flex items-center gap-1">
-          <Clock className="h-3 w-3 opacity-60" />
-          <span>{formatCountdown(remainingMs)}</span>
+        <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
+          Time Left
         </div>
       </div>
+
     </>
   );
 
@@ -526,7 +576,7 @@ function ProgressTrack({
 
       {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
-      <div className="relative overflow-visible px-8">
+        <div className="relative overflow-visible px-4">
         {renderAboveTrackElements()}
         <div
           className="absolute bg-slate-300 start-marker-line"
