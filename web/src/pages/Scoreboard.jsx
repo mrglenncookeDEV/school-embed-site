@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Timer, Megaphone } from "lucide-react";
+import { Timer, Megaphone, Trophy, Star } from "lucide-react";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
 
 const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
@@ -138,6 +138,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Increase container height if needed — do not move icons.
 function ProgressTrack({
   title,
+  subtitle = null,
   rows = [],
   timeProgress = 0,
   timePillType,
@@ -152,8 +153,10 @@ function ProgressTrack({
   timePillPrimaryColor = "#0f172a",
   timePillTieColors = [],
   leaderHouseKey = null,
+  onFinish,
 }) {
   const [now, setNow] = useState(() => Date.now());
+  const [hasFiredFinish, setHasFiredFinish] = useState(false);
   const TRACK_CENTER_Y = "50%";
   const clampedTime = clamp01(timeProgress);
 
@@ -167,10 +170,10 @@ function ProgressTrack({
       day % 10 === 1 && day !== 11
         ? "st"
         : day % 10 === 2 && day !== 12
-        ? "nd"
-        : day % 10 === 3 && day !== 13
-        ? "rd"
-        : "th";
+          ? "nd"
+          : day % 10 === 3 && day !== 13
+            ? "rd"
+            : "th";
 
     return `${day}${suffix} ${d.toLocaleDateString("en-GB", { month: "short" })}`;
   };
@@ -179,8 +182,8 @@ function ProgressTrack({
     timePillType === "weekday"
       ? getWeekdayLabel()
       : timePillType === "date"
-      ? getDateLabel()
-      : null;
+        ? getDateLabel()
+        : null;
 
   const highlightSet = useMemo(
     () => new Set(highlightHouseKeys.filter(Boolean)),
@@ -225,6 +228,16 @@ function ProgressTrack({
 
   const finishDeadline = getFinishDeadline();
   const remainingMs = finishDeadline ? finishDeadline - now : 0;
+  const isUrgent = remainingMs > 0 && remainingMs < DAY_MS;
+  const isFinished = remainingMs <= 0 && finishDeadline !== null;
+
+  useEffect(() => {
+    if (isFinished && !hasFiredFinish && !disabled) {
+      if (onFinish) onFinish();
+      setHasFiredFinish(true);
+    }
+  }, [isFinished, hasFiredFinish, disabled, onFinish]);
+
   const formatCountdown = (ms) => {
     if (ms <= 0) return "0s";
 
@@ -303,13 +316,16 @@ function ProgressTrack({
     if (disabled) return [];
 
     const computed = effectiveRows.map((house, index) => {
+      const isLeader = maxPoints > 0 && Number(house.points ?? 0) === maxPoints;
       const scoreProgress = maxPoints > 0 ? (house.points ?? 0) / maxPoints : 0;
       const laneIndex = index % LANES.length;
+      const finalProgress = (isFinished && isLeader) ? 1.02 : scoreProgress * clampedTime;
 
       return {
         ...house,
-        finalProgress: scoreProgress * clampedTime,
+        finalProgress,
         laneIndex,
+        isLeader,
       };
     });
 
@@ -327,7 +343,7 @@ function ProgressTrack({
         stackSize: group.length,
       }))
     );
-  }, [disabled, effectiveRows, maxPoints, clampedTime]);
+  }, [disabled, effectiveRows, maxPoints, clampedTime, isFinished]);
 
   const FAN_OUT_DURATION = "320ms";
 
@@ -401,6 +417,27 @@ function ProgressTrack({
           </span>
         </div>
         <div
+          className="absolute top-0 bottom-0 flex items-center pointer-events-none"
+          style={{
+            right: "62px",
+            zIndex: 1,
+          }}
+        >
+          <span
+            style={{
+              transform: "rotate(90deg)",
+              color: "rgba(255,255,255,0.4)",
+              fontSize: "24px",
+              fontWeight: "900",
+              letterSpacing: "0.3em",
+              fontFamily: "system-ui, sans-serif",
+              whiteSpace: "nowrap",
+            }}
+          >
+            FINISH
+          </span>
+        </div>
+        <div
           className="absolute top-0 bottom-0 right-0 pointer-events-none"
           style={{
             width: "60px",
@@ -469,6 +506,12 @@ function ProgressTrack({
                   style={{ zIndex: 10 }}
                 >
                   <span
+                    className={`
+                      absolute h-2 w-2 border border-slate-200 bg-white
+                      ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
+                    `}
+                  />
+                  <span
                     className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold shadow-sm whitespace-nowrap"
                     style={{
                       ...PLAYFUL_FONT,
@@ -478,15 +521,9 @@ function ProgressTrack({
                   >
                     {house.name} — {pointsLabel}
                   </span>
-                  <span
-                    className={`
-                      absolute h-2 w-2 border border-slate-200 bg-white
-                      ${labelAbove ? "top-full rotate-45" : "-top-1 -rotate-45"}
-                    `}
-                  />
                 </span>
                 <div
-                  className="flex h-8 w-8 items-center justify-center rounded-full shadow-lg md:h-10 md:w-10 flex-shrink-0"
+                  className="relative flex h-8 w-8 items-center justify-center rounded-full shadow-lg md:h-10 md:w-10 flex-shrink-0"
                   style={{
                     backgroundColor: houseColor,
                     borderColor,
@@ -495,6 +532,7 @@ function ProgressTrack({
                     filter: badgeShadow,
                   }}
                 >
+
                   {HouseIcon ? (
                     <HouseIcon
                       className="h-4 w-4 text-white"
@@ -548,17 +586,44 @@ function ProgressTrack({
           pointerEvents: "none",
         }}
       >
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1 shadow-sm backdrop-blur-sm">
+        <div className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1 shadow-sm backdrop-blur-sm">
+          {isUrgent && (
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+            </span>
+          )}
           <Timer className="h-3.5 w-3.5 text-slate-500" />
           <span className="text-xs font-bold text-slate-700 tabular-nums tracking-tight">
             {formatCountdown(remainingMs)}
           </span>
         </div>
-        <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
+        <div className={`mt-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isUrgent ? "text-red-500" : "text-slate-400"
+          }`}>
           Time Left
         </div>
       </div>
 
+      {isFinished && markers.some(m => m.isLeader) && (
+        <div
+          className="absolute flex flex-col items-center"
+          style={{
+            left: `${clampedTime * 100}%`,
+            top: "54px",
+            transform: "translateX(-50%)",
+            zIndex: 14,
+            width: "max-content",
+          }}
+        >
+          <Trophy className="h-8 w-8 text-yellow-500 fill-yellow-400 animate-bounce drop-shadow-md" />
+          <div
+            className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-600"
+            style={PLAYFUL_FONT}
+          >
+            Winner: {formatTiedHouseNames(markers.filter(m => m.isLeader).map(m => m.name))}
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -567,34 +632,39 @@ function ProgressTrack({
       className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
       style={borderStyle}
     >
-      <h2
-        className="highlight-title mb-3 text-lg font-semibold uppercase tracking-[0.4em]"
-        style={{ ...PLAYFUL_FONT, color: titleColor }}
-      >
-        {title}
-      </h2>
+      <div className="mb-3 space-y-1">
+        <h2
+          className="highlight-title text-lg font-semibold uppercase tracking-[0.4em]"
+          style={{ ...PLAYFUL_FONT, color: titleColor }}
+        >
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="text-sm font-semibold text-slate-700">{subtitle}</p>
+        )}
+      </div>
 
       {/* TRACK + ICON SEMANTICS LOCKED. Do not re-anchor icons or alter track layering. Increase visual height outward if needed. */}
       <div className="relative h-[320px] pt-20">
         <div className="relative overflow-visible px-4">
-        {renderAboveTrackElements()}
-        <div
-          className="absolute bg-slate-300 start-marker-line"
-          style={{
-            left: `${clampedTime * 100}%`,
-            top: "-32px",
-            width: "1px",
-            height: "220px",
-            transform: "translateX(-50%)",
-          }}
-        />
-        <div className="relative w-full h-[120px] overflow-visible">
-        {renderTrackZone()}
+          {renderAboveTrackElements()}
+          <div
+            className="absolute bg-slate-300 start-marker-line"
+            style={{
+              left: `${clampedTime * 100}%`,
+              top: "-32px",
+              width: "1px",
+              height: "220px",
+              transform: "translateX(-50%)",
+            }}
+          />
+          <div className="relative w-full h-[120px] overflow-visible">
+            {renderTrackZone()}
+          </div>
+          <div className="relative mt-12 h-[56px]">
+            {renderBelowTrackElements()}
+          </div>
         </div>
-        <div className="relative mt-12 h-[56px]">
-          {renderBelowTrackElements()}
-        </div>
-      </div>
       </div>
       {footer && (
         <div className="mt-4 border-t border-slate-100 pt-4 flex justify-end">
@@ -637,16 +707,16 @@ function HouseAxisTick({ x, y, payload, axisMetaMap = {} }) {
           />
         </g>
       )}
-    <text
-      x={0}
-      y={48}
-      textAnchor="middle"
-      fill={color}
-      style={playfulFont}
-      fontSize="0.75rem"
-    >
-      {pointsLabel}
-    </text>
+      <text
+        x={0}
+        y={48}
+        textAnchor="middle"
+        fill={color}
+        style={playfulFont}
+        fontSize="0.75rem"
+      >
+        {pointsLabel}
+      </text>
     </g>
   );
 }
@@ -789,11 +859,14 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     week: null,
     term: null,
   });
+  const [submissions, setSubmissions] = useState([]);
   const [missingClasses, setMissingClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [missingLoading, setMissingLoading] = useState(true);
+  const [submissionsLoading, setSubmissionsLoading] = useState(true);
   const [error, setError] = useState("");
   const [missingError, setMissingError] = useState("");
+  const [submissionsError, setSubmissionsError] = useState("");
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
   const chartRef = useRef(null);
@@ -802,24 +875,35 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     async ({ showLoading = true } = {}) => {
       if (showLoading && scoreboardMountedRef.current) {
         setLoading(true);
+        setSubmissionsLoading(true);
       }
       try {
-        const response = await fetch("/api/scoreboard/current");
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to load scoreboard");
-        }
+        const [scoreRes, entriesRes] = await Promise.all([
+          fetch("/api/scoreboard/current"),
+          fetch("/api/entries?week=current")
+        ]);
+
+        const payload = await scoreRes.json();
+        const entriesPayload = await entriesRes.json();
+
+        if (!scoreRes.ok) throw new Error(payload.error || "Unable to load scoreboard");
+        if (!entriesRes.ok) throw new Error(entriesPayload.error || "Unable to load entries");
+
         if (scoreboardMountedRef.current) {
           setScoreboard(payload);
+          setSubmissions(entriesPayload.entries || []);
           setError("");
+          setSubmissionsError("");
         }
       } catch (err) {
         if (scoreboardMountedRef.current) {
           setError(err.message);
+          setSubmissionsError(err.message);
         }
       } finally {
         if (scoreboardMountedRef.current) {
           setLoading(false);
+          setSubmissionsLoading(false);
         }
       }
     },
@@ -1068,33 +1152,33 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
   const LeadingHouseIcon = leadingHouse
     ? (HOUSES[resolveHouseKey(
-        leadingHouse.houseId ??
-          leadingHouse.house_id ??
-          leadingHouse.house ??
-          leadingHouse.id
-      )]?.icon || null)
+      leadingHouse.houseId ??
+      leadingHouse.house_id ??
+      leadingHouse.house ??
+      leadingHouse.id
+    )]?.icon || null)
     : null;
   const TermLeadingHouseIcon = termLeadingRow
     ? (HOUSES[resolveHouseKey(
-        termLeadingRow.houseId ??
-          termLeadingRow.house_id ??
-          termLeadingRow.house ??
-          termLeadingRow.id
-      )]?.icon || null)
+      termLeadingRow.houseId ??
+      termLeadingRow.house_id ??
+      termLeadingRow.house ??
+      termLeadingRow.id
+    )]?.icon || null)
     : null;
   const leadingHouseColor = leadingHouse
     ? (
-        HOUSES[
-          resolveHouseKey(
-            leadingHouse.houseId ??
-              leadingHouse.house_id ??
-              leadingHouse.house ??
-              leadingHouse.id
-          )
-        ]?.color ??
-        leadingHouse.color ??
-        "#2563eb"
-      )
+      HOUSES[
+        resolveHouseKey(
+          leadingHouse.houseId ??
+          leadingHouse.house_id ??
+          leadingHouse.house ??
+          leadingHouse.id
+        )
+      ]?.color ??
+      leadingHouse.color ??
+      "#2563eb"
+    )
     : "#2563eb";
   const tieHouseColors = useMemo(() => {
     const colors = tiedHouses.map((row) => row.color ?? "#2563eb").filter(Boolean);
@@ -1120,9 +1204,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
     const origin = rect
       ? {
-          x: (rect.left + rect.width / 2) / window.innerWidth,
-          y: rect.top / window.innerHeight,
-        }
+        x: (rect.left + rect.width / 2) / window.innerWidth,
+        y: rect.top / window.innerHeight,
+      }
       : { x: 0.5, y: 0.25 };
 
     const colors = confettiColors.length
@@ -1275,12 +1359,11 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const missingHeadline = missingLoading
     ? "Checking for outstanding submissions…"
     : missingError
-    ? missingError
-    : missingCount === 0
-    ? "All classes submitted this week"
-    : `${missingCount} class${missingCount === 1 ? "" : "es"} ${
-        missingCount === 1 ? "has not" : "have not"
-      } submitted this week`;
+      ? missingError
+      : missingCount === 0
+        ? "All classes submitted this week"
+        : `${missingCount} class${missingCount === 1 ? "" : "es"} ${missingCount === 1 ? "has not" : "have not"
+        } submitted this week`;
 
   return (
     <section className={`${containerClasses} w-full`}>
@@ -1451,6 +1534,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       <div className="space-y-4">
         <ProgressTrack
           title="RACE FOR THE WEEK!"
+          subtitle={weekRangeLabel}
           rows={weekRows}
           timeProgress={weekTimeProgress}
           placeholderText="Week data unavailable"
@@ -1463,9 +1547,11 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           titleColor={WEEK_TITLE_COLOR}
           borderStyle={weekTrackBorderStyle}
           leaderHouseKey={weekLeadingHouseKey}
+          onFinish={fireConfettiBurst}
         />
         <ProgressTrack
           title="RACE FOR THE TERM!!!"
+          subtitle={termSubtitle}
           rows={termRows}
           timeProgress={termTimeProgress}
           disabled={termDisabled}
@@ -1480,12 +1566,91 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           footer={termLeadingHouseFooter}
           termEndDate={termEndDate}
           leaderHouseKey={termLeadingHouseKey}
+          onFinish={fireConfettiBurst}
         />
       </div>
 
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden">
+        <div className="mb-4 w-auto flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 animate-pulse flex-shrink-0" />
+              <h2
+                className="highlight-title text-lg font-semibold uppercase tracking-[0.4em] text-slate-500 whitespace-nowrap"
+                style={PLAYFUL_FONT}
+              >
+                RECENT STARS!
+              </h2>
+              <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 animate-pulse delay-75 flex-shrink-0" />
+            </div>
+            <p className="text-sm text-slate-600">Points recorded this week.</p>
+          </div>
+        </div>
+
+        {submissionsLoading ? (
+          <p className="text-sm text-slate-500">Loading submissions…</p>
+        ) : submissionsError ? (
+          <p className="text-sm text-rose-600">{submissionsError}</p>
+        ) : submissions.length === 0 ? (
+          <p className="text-sm text-slate-600">No submissions yet this week.</p>
+        ) : (
+          <div className="overflow-x-auto overflow-y-auto -mx-6" style={{ maxHeight: "420px" }}>
+            <table className="w-full min-w-[700px] table-auto text-sm relative">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.3em] text-slate-500 sticky top-0 z-10">
+                <tr>
+                  <th className="px-6 py-3">Class</th>
+                  <th className="px-6 py-3">House</th>
+                  <th className="px-6 py-3">Points</th>
+                  <th className="px-6 py-3">Submitted by</th>
+                  <th className="px-6 py-3">Date</th>
+                  <th className="px-6 py-3">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {submissions.map((entry) => {
+                  const houseId = entry.house_id || entry.houseId;
+                  const houseMeta = HOUSES[resolveHouseKey(houseId)];
+                  const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
+                  const HouseIcon = houseMeta?.icon;
+                  const houseLabel = houseMeta?.name ?? entry.house_name;
+                  return (
+                    <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-slate-900">{entry.class_name}</td>
+                      <td className="px-6 py-4">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: houseColor }}
+                          />
+                          <span className="flex items-center gap-2 text-slate-700">
+                            {HouseIcon && (
+                              <HouseIcon className="h-4 w-4" color={houseColor} />
+                            )}
+                            {houseLabel}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-900">{entry.points}</td>
+                      <td className="px-6 py-4 text-slate-600">{entry.submitted_by_email}</td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {entry.entry_date ? new Date(entry.entry_date).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                        }) : "—"}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 italic">{entry.notes || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {showMissing && (
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "500px" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-red-50 z-10 pb-4">
             <div>
               <h2
                 className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500"
@@ -1499,34 +1664,36 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
             </span>
           </div>
 
-          {missingLoading ? (
-            <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
-          ) : missingError ? (
-            <p className="mt-4 text-sm text-rose-600">{missingError}</p>
-          ) : mergedMissingClasses.length === 0 ? (
-            <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
-          ) : (
-            <ul className="mt-4 grid gap-3">
-              {mergedMissingClasses.map((klass) => (
-                <li
-                  key={klass.id}
-                  className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-red-700">{klass.name}</p>
-                    <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
-                      {klass.reason ?? "Missing"}
-                    </span>
-                  </div>
-                  {klass.teacherDisplayName || klass.teacher_email ? (
-                    <p className="mt-2 text-xs text-red-500">
-                      {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
-                    </p>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="overflow-y-auto pr-2">
+            {missingLoading ? (
+              <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
+            ) : missingError ? (
+              <p className="mt-4 text-sm text-rose-600">{missingError}</p>
+            ) : mergedMissingClasses.length === 0 ? (
+              <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
+            ) : (
+              <ul className="mt-4 grid gap-3">
+                {mergedMissingClasses.map((klass) => (
+                  <li
+                    key={klass.id}
+                    className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-red-700">{klass.name}</p>
+                      <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
+                        {klass.reason ?? "Missing"}
+                      </span>
+                    </div>
+                    {klass.teacherDisplayName || klass.teacher_email ? (
+                      <p className="mt-2 text-xs text-red-500">
+                        {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </section>
