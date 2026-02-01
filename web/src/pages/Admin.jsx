@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { getHouseById } from "../config/houses";
 
 export default function Admin() {
@@ -91,30 +92,34 @@ export default function Admin() {
     <section className="flex w-full flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Admin</p>
-        <h1 className="text-3xl font-bold text-slate-900">Manage entries</h1>
-        <p className="text-sm text-slate-600">Review this week’s submissions and audit trail.</p>
+        <h1 className="text-3xl font-bold text-slate-900">
+          {activeTab === "entries" ? "Manage Entries" : "Manage Setup"}
+        </h1>
+        <p className="text-sm text-slate-600">
+          {activeTab === "entries"
+            ? "Review this week’s submissions and audit trail."
+            : "Configure school houses, classes, and site settings."}
+        </p>
       </div>
 
       <div className="mb-6 border-b border-slate-200 dark:border-white/10">
         <div className="flex gap-6 text-sm font-medium">
           <button
             onClick={() => setActiveTab("entries")}
-            className={`pb-3 border-b-2 transition ${
-              activeTab === "entries"
-                ? "border-slate-900 dark:border-white"
-                : "border-transparent text-slate-500"
-            }`}
+            className={`pb-3 border-b-2 transition ${activeTab === "entries"
+              ? "border-slate-900 dark:border-white"
+              : "border-transparent text-slate-500"
+              }`}
           >
             Manage Entries
           </button>
 
           <button
             onClick={() => setActiveTab("setup")}
-            className={`pb-3 border-b-2 transition ${
-              activeTab === "setup"
-                ? "border-slate-900 dark:border-white"
-                : "border-transparent text-slate-500"
-            }`}
+            className={`pb-3 border-b-2 transition ${activeTab === "setup"
+              ? "border-slate-900 dark:border-white"
+              : "border-transparent text-slate-500"
+              }`}
           >
             Manage Setup
           </button>
@@ -179,24 +184,26 @@ export default function Admin() {
                           <td className="px-3 py-3 text-slate-600">{entry.submitted_by_email}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.entry_date}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.notes || "—"}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openTeacherSubmitModalForEntry(entry)}
-                            className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 transition hover:text-slate-600"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            disabled={deletingId === entry.id}
-                            onClick={() => requestDelete(entry.id)}
-                            className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 transition hover:text-rose-400 disabled:text-slate-400"
-                          >
-                            {deletingId === entry.id ? "Deleting…" : "Delete"}
-                          </button>
-                        </div>
-                      </td>
+                          <td className="px-3 py-3">
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openTeacherSubmitModalForEntry(entry)}
+                                className="p-1.5 text-slate-500 transition hover:text-slate-900"
+                                title="Edit Entry"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                disabled={deletingId === entry.id}
+                                onClick={() => requestDelete(entry.id)}
+                                className="p-1.5 text-rose-600 transition hover:text-rose-800 disabled:opacity-30"
+                                title="Delete Entry"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}

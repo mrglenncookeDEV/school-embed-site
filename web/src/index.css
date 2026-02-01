@@ -184,11 +184,11 @@ body {
 }
 
 .house-cars {
-  z-index: 10;
+  z-index: 2;
 }
 
 .start-marker-line {
-  z-index: 10;
+  z-index: 1;
 }
 
 .highlight-title {

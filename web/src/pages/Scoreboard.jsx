@@ -375,16 +375,7 @@ function ProgressTrack({
             }}
           />
         </div>
-        {/* edge fade */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 8%)",
-            opacity: 0.5,
-            zIndex: 2,
-          }}
-        />
+        {/* Racetrack elements */}
         <div
           className="absolute top-0 bottom-0 left-0 pointer-events-none"
           style={{
@@ -561,7 +552,7 @@ function ProgressTrack({
           left: `${clampedTime * 100}%`,
           top: "-56px",
           transform: "translateX(-50%)",
-          zIndex: 14,
+          zIndex: 5,
         }}
       >
         <span
@@ -582,7 +573,7 @@ function ProgressTrack({
           left: `${clampedTime * 100}%`,
           top: "0px",
           transform: "translateX(-50%)",
-          zIndex: 14,
+          zIndex: 5,
           pointerEvents: "none",
         }}
       >
@@ -611,7 +602,7 @@ function ProgressTrack({
             left: `${clampedTime * 100}%`,
             top: "54px",
             transform: "translateX(-50%)",
-            zIndex: 14,
+            zIndex: 5,
             width: "max-content",
           }}
         >
