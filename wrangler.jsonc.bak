@@ -8,8 +8,8 @@
 	"main": "src/index.js",
 	"compatibility_date": "2025-09-27",
 	"assets": {
-		"directory": "./web/dist",
-		"binding": "ASSETS"
+		// The path to the directory containing the `index.html` file to be served at `/`
+		"directory": "./public"
 	},
 	"durable_objects": {
 		"bindings": [

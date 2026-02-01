@@ -1,0 +1,66 @@
+
+--- 2026-02-01T18:08:04.175Z debug
+🪵  Writing logs to "/Users/glenncooke/school-embed-site/wrangler-logs/wrangler-2026-02-01_18-08-03_909.log"
+---
+
+--- 2026-02-01T18:08:04.175Z debug
+Metrics dispatcher: Posting data {"deviceId":"fc7045c6-e23f-4743-9961-9e3ae2c1dae0","event":"wrangler command started","timestamp":1769969284175,"properties":{"amplitude_session_id":1769969284172,"amplitude_event_id":0,"wranglerVersion":"4.60.0","wranglerMajorVersion":4,"wranglerMinorVersion":60,"wranglerPatchVersion":0,"osPlatform":"Mac OS","osVersion":"Darwin Kernel Version 24.6.0: Wed Nov  5 21:30:23 PST 2025; root:xnu-11417.140.69.705.2~1/RELEASE_X86_64","nodeVersion":24,"packageManager":"npm","isFirstUsage":false,"configFileType":"jsonc","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":false,"hasAssets":true,"argsUsed":["inspectorPort","ip","port"],"argsCombination":"inspectorPort, ip, port","agent":null,"command":"wrangler dev","args":{}}}
+---
+
+--- 2026-02-01T18:08:04.185Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:08:04.185Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:08:04.225Z log
+
+ ⛅️ wrangler 4.60.0 (update available 4.61.1)
+─────────────────────────────────────────────
+---
+
+--- 2026-02-01T18:08:04.242Z debug
+setting config
+---
+
+--- 2026-02-01T18:08:04.243Z debug
+Updating config... undefined undefined
+---
+
+--- 2026-02-01T18:08:04.262Z debug
+Metrics dispatcher: Failed to send request: fetch failed
+---
+
+--- 2026-02-01T18:08:04.274Z debug
+local dev variables file not found at ".dev.vars". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:08:04.274Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:08:04.274Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:08:04.276Z log
+Your Worker has access to the following bindings:
+---
+
+--- 2026-02-01T18:08:04.276Z log
+Binding                                      Resource            Mode
+---
+
+--- 2026-02-01T18:08:04.276Z log
+env.MY_DURABLE_OBJECT (MyDurableObject)      Durable Object      local
+---
+
+--- 2026-02-01T18:08:04.276Z log
+env.DB (school_db)                           D1 Database         remote
+---
+
+--- 2026-02-01T18:08:04.276Z log
+
+---

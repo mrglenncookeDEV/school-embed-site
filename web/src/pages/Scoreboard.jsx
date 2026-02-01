@@ -1592,6 +1592,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   <th className="px-6 py-3">Class</th>
                   <th className="px-6 py-3">House</th>
                   <th className="px-6 py-3">Points</th>
+                  <th className="px-6 py-3">Category</th>
                   <th className="px-6 py-3">Submitted by</th>
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3">Notes</th>
@@ -1622,6 +1623,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                         </span>
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-900">{entry.points}</td>
+                      <td className="px-6 py-4 text-slate-600">{entry.award_category || "General"}</td>
                       <td className="px-6 py-4 text-slate-600">{entry.submitted_by_email}</td>
                       <td className="px-6 py-4 text-slate-600">
                         {entry.entry_date ? new Date(entry.entry_date).toLocaleDateString("en-GB", {

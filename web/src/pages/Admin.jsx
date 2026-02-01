@@ -150,6 +150,7 @@ export default function Admin() {
                       <th className="px-3 py-2">Class</th>
                       <th className="px-3 py-2">House</th>
                       <th className="px-3 py-2">Points</th>
+                      <th className="px-3 py-2">Category</th>
                       <th className="px-3 py-2">Submitted by</th>
                       <th className="px-3 py-2">Date</th>
                       <th className="px-3 py-2">Notes</th>
@@ -181,6 +182,7 @@ export default function Admin() {
                             </span>
                           </td>
                           <td className="px-3 py-3 font-semibold text-slate-900">{entry.points}</td>
+                          <td className="px-3 py-3 text-slate-600">{entry.award_category || "General"}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.submitted_by_email}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.entry_date}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.notes || "—"}</td>

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "npx wrangler dev --local --port 8787",
+    "dev": "npx wrangler dev --port 8787",
     "start": "npx wrangler dev",
     "build:web": "cd web && npm run build",
     "deploy": "npm run build:web && npx wrangler deploy"

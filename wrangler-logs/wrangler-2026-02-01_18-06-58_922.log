@@ -1,0 +1,34 @@
+
+--- 2026-02-01T18:06:59.191Z debug
+🪵  Writing logs to "/Users/glenncooke/school-embed-site/wrangler-logs/wrangler-2026-02-01_18-06-58_922.log"
+---
+
+--- 2026-02-01T18:06:59.191Z debug
+Metrics dispatcher: Posting data {"deviceId":"fc7045c6-e23f-4743-9961-9e3ae2c1dae0","event":"wrangler command started","timestamp":1769969219191,"properties":{"amplitude_session_id":1769969219187,"amplitude_event_id":0,"wranglerVersion":"4.60.0","wranglerMajorVersion":4,"wranglerMinorVersion":60,"wranglerPatchVersion":0,"osPlatform":"Mac OS","osVersion":"Darwin Kernel Version 24.6.0: Wed Nov  5 21:30:23 PST 2025; root:xnu-11417.140.69.705.2~1/RELEASE_X86_64","nodeVersion":24,"packageManager":"npm","isFirstUsage":false,"configFileType":"jsonc","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":false,"hasAssets":true,"argsUsed":["ip","port"],"argsCombination":"ip, port","agent":null,"command":"wrangler dev","args":{}}}
+---
+
+--- 2026-02-01T18:06:59.205Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:06:59.205Z debug
+.env file not found at "/Users/glenncooke/school-embed-site/.env.local". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-02-01T18:06:59.242Z log
+
+ ⛅️ wrangler 4.60.0 (update available 4.61.1)
+─────────────────────────────────────────────
+---
+
+--- 2026-02-01T18:06:59.258Z debug
+setting config
+---
+
+--- 2026-02-01T18:06:59.259Z debug
+Updating config... undefined undefined
+---
+
+--- 2026-02-01T18:06:59.277Z debug
+Metrics dispatcher: Failed to send request: fetch failed
+---
