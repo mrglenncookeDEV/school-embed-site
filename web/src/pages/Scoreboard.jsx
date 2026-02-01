@@ -1,5 +1,6 @@
 import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
 import {
   Bar,
   BarChart,
@@ -9,8 +10,59 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Timer, Megaphone, Trophy, Star } from "lucide-react";
-import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
+import {
+  Timer,
+  Megaphone,
+  Trophy,
+  Star,
+  Shield,
+  Crown,
+  Heart,
+  Zap,
+  Ghost,
+  Bird,
+  Cat,
+  Dog,
+  Trees,
+  Cloud,
+  Sun,
+  Moon,
+  Map,
+  Flag,
+  Home,
+  User,
+  Earth,
+  Droplets,
+  Flame,
+  Wind,
+  Sparkles,
+} from "lucide-react";
+
+const ICON_MAP = {
+  shield: Shield,
+  trophy: Trophy,
+  star: Star,
+  crown: Crown,
+  heart: Heart,
+  zap: Zap,
+  ghost: Ghost,
+  bird: Bird,
+  cat: Cat,
+  dog: Dog,
+  tree: Trees,
+  cloud: Cloud,
+  sun: Sun,
+  moon: Moon,
+  map: Map,
+  flag: Flag,
+  home: Home,
+  user: User,
+  earth: Earth,
+  droplets: Droplets,
+  flame: Flame,
+  wind: Wind,
+  sparkles: Sparkles,
+};
 
 const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
 
@@ -462,7 +514,8 @@ function ProgressTrack({
               house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
             const canonicalKey = resolveHouseKey(highlightKey);
             const houseMeta = HOUSES[canonicalKey] ?? {};
-            const HouseIcon = houseMeta.icon;
+            const dbIconName = String(house.icon || houseMeta.iconName || "").toLowerCase();
+            const HouseIcon = ICON_MAP[dbIconName] || houseMeta.icon || ICON_MAP.shield;
             const isHighlighted = highlightSet.has(highlightKey);
             const badgeShadow =
               isHighlighted
@@ -606,7 +659,7 @@ function ProgressTrack({
             width: "max-content",
           }}
         >
-          <Trophy className="h-8 w-8 text-yellow-500 fill-yellow-400 animate-bounce drop-shadow-md" />
+          <Trophy className="h-6 w-6 text-yellow-500 fill-yellow-400 animate-bounce drop-shadow-md" />
           <div
             className="mt-1 text-xs font-bold uppercase tracking-widest text-emerald-600"
             style={PLAYFUL_FONT}

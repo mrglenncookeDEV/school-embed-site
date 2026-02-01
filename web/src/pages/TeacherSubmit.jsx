@@ -75,9 +75,9 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
                 weekday: "long",
                 hour: "2-digit",
                 minute: "2-digit",
-                timeZone: "UTC",
+                timeZone: "GMT",
                 hour12: false,
-              })} UTC`
+              })} GMT`
             );
           }
         }
@@ -165,34 +165,33 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
 
   return (
     <section className="flex w-full flex-col gap-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <img
-              src="/favicon.png"
-              alt="House Points logo"
-              className="h-12 w-12 sm:h-24 sm:w-24 object-contain"
-              loading="lazy"
-            />
-            <div className="space-y-2">
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">Teacher Submit</p>
-              <h1 className="text-3xl font-bold text-slate-900">
-                {isEditing ? "Edit submission" : "Log house points"}
-              </h1>
-              {isEditing && (
-                <p className="text-sm text-slate-600">
-                  Editing an existing record — submit points to save changes.
-                </p>
-              )}
-              {deadline && <p className="text-sm text-slate-600">{deadline}</p>}
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <img
+          src="/favicon.png"
+          alt="House Points logo"
+          className="h-12 w-12 sm:h-24 sm:w-24 object-contain"
+          loading="lazy"
+        />
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">Teacher Submit</p>
+          <h1 className="text-3xl font-bold text-slate-900">
+            {isEditing ? "Edit submission" : "Log house points"}
+          </h1>
+          {isEditing && (
+            <p className="text-sm text-slate-600">
+              Editing an existing record — submit points to save changes.
+            </p>
+          )}
+          {deadline && <p className="text-sm text-slate-600">{deadline}</p>}
+        </div>
+      </div>
 
       {status.message && (
         <div
-          className={`rounded-2xl px-4 py-3 text-sm ${
-            status.type === "success"
-              ? "bg-emerald-50 text-emerald-800"
-              : "bg-rose-50 text-rose-800"
-          }`}
+          className={`rounded-2xl px-4 py-3 text-sm ${status.type === "success"
+            ? "bg-emerald-50 text-emerald-800"
+            : "bg-rose-50 text-rose-800"
+            }`}
         >
           {status.message}
         </div>
@@ -205,16 +204,16 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <label className="space-y-1 text-sm font-semibold text-slate-700">
               Class
-                <select
-                  value={form.classId}
-                  onChange={(event) => handleClassChange(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
-                >
+              <select
+                value={form.classId}
+                onChange={(event) => handleClassChange(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:border-slate-400 focus:outline-none"
+              >
                 <option value="">Select class</option>
                 {classes.map((klass) => (
-                    <option key={klass.id} value={klass.id}>
-                      {klass.name} · {klass.teacherDisplayName}
-                    </option>
+                  <option key={klass.id} value={klass.id}>
+                    {klass.name} · {klass.teacherDisplayName}
+                  </option>
                 ))}
               </select>
             </label>
@@ -289,15 +288,14 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
 
             <button
               disabled={submitDisabled}
-              className={`rounded-2xl px-4 py-3 text-sm font-semibold uppercase tracking-wider text-white transition ${
-                submitDisabled ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
-              }`}
+              className={`rounded-2xl px-4 py-3 text-sm font-semibold uppercase tracking-wider text-white transition ${submitDisabled ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
+                }`}
             >
               {isSubmitting
                 ? "Saving…"
                 : isEditing
-                ? "Save changes"
-                : "Submit points"}
+                  ? "Save changes"
+                  : "Submit points"}
             </button>
 
             {status.type === "error" && (

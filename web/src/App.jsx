@@ -5,6 +5,7 @@ import Admin from "./pages/Admin";
 import EmbedScoreboard from "./pages/EmbedScoreboard";
 import Scoreboard from "./pages/Scoreboard";
 import TeacherSubmit from "./pages/TeacherSubmit";
+import TestHouses from "./pages/TestHouses";
 
 function SlideUpModal({ open, onClose, children }) {
   useEffect(() => {
@@ -134,10 +135,9 @@ function AppContent() {
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `rounded-lg px-3 py-2 transition ${
-                        isActive
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-600 hover:text-slate-900"
+                      `rounded-lg px-3 py-2 transition ${isActive
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:text-slate-900"
                       }`
                     }
                   >
@@ -163,6 +163,7 @@ function AppContent() {
           <Route path="/teacher" element={<Scoreboard />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/embed/scoreboard" element={<EmbedScoreboard />} />
+          <Route path="/test-houses" element={<TestHouses />} />
           <Route path="*" element={<Scoreboard />} />
         </Routes>
       </main>

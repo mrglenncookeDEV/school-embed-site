@@ -46,9 +46,37 @@ async function checkSchema(db) {
 
 const formatDate = (date) => date.toISOString().split("T")[0];
 
-const getWeekStart = (date = new Date()) => {
+const getLondonDate = () => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(new Date());
+  const part = (type) => parseInt(parts.find(p => p.type === type).value, 10);
+
+  // Construct a UTC date that matches the London wall time.
+  // This essentially "shifts" the timestamp so that getUTC* methods return London time.
+  return new Date(Date.UTC(
+    part('year'),
+    part('month') - 1,
+    part('day'),
+    part('hour'),
+    part('minute'),
+    part('second')
+  ));
+};
+
+const getWeekStart = (date = getLondonDate()) => {
   const current = new Date(date);
   const day = current.getUTCDay();
+  // Adjust to Monday (1) being start of week
+  // If Sunday (0), we go back 6 days. If Monday (1), go back 0 days.
   const diff = (day + 6) % 7;
   const monday = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() - diff));
   monday.setUTCHours(0, 0, 0, 0);
@@ -98,7 +126,115 @@ async function ensureCurrentWeek(db) {
 
 
 async function fetchHouses(db) {
-  return getCanonicalHouses();
+  const { results } = await db.prepare("SELECT id, name, color, icon FROM houses ORDER BY name ASC").all();
+  return results.map((row) => ({
+    id: row.id,
+    houseId: row.id,
+    name: row.name,
+    color: row.color,
+    icon: row.icon || "shield",
+  }));
+}
+
+async function handleHousesPost(request, db) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, color, icon } = payload;
+
+  if (!name || !color) {
+    return json({ error: "Name and color are required" }, 400);
+  }
+
+  try {
+    const result = await db
+      .prepare("INSERT INTO houses (name, color, icon) VALUES (?, ?, ?)")
+      .bind(name, color, icon || "shield")
+      .run();
+
+    await logAudit(db, {
+      action: "create_house",
+      actorEmail: "admin@school.local",
+      targetType: "house",
+      targetId: result.meta.last_row_id,
+      meta: { name, color, icon },
+    });
+
+    return json({ success: true, id: result.meta.last_row_id });
+  } catch (error) {
+    if (error.message.includes("UNIQUE constraint failed")) {
+      return json({ error: "House name already exists" }, 409);
+    }
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleHousesPut(request, db, houseId) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, color, icon } = payload;
+
+  if (!name || !color) {
+    return json({ error: "Name and color are required" }, 400);
+  }
+
+  try {
+    await db
+      .prepare("UPDATE houses SET name = ?, color = ?, icon = ? WHERE id = ?")
+      .bind(name, color, icon || "shield", houseId)
+      .run();
+
+    await logAudit(db, {
+      action: "update_house",
+      actorEmail: "admin@school.local",
+      targetType: "house",
+      targetId: houseId,
+      meta: { name, color, icon },
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    if (error.message.includes("UNIQUE constraint failed")) {
+      return json({ error: "House name already exists" }, 409);
+    }
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleHousesDelete(request, db, houseId) {
+  try {
+    // Check if house has point entries
+    const { results } = await db
+      .prepare("SELECT 1 FROM point_entries WHERE house_id = ? LIMIT 1")
+      .bind(houseId)
+      .all();
+
+    if (results.length > 0) {
+      return json({ error: "Cannot delete house with existing point entries" }, 400);
+    }
+
+    await db.prepare("DELETE FROM houses WHERE id = ?").bind(houseId).run();
+
+    await logAudit(db, {
+      action: "delete_house",
+      actorEmail: "admin@school.local",
+      targetType: "house",
+      targetId: houseId,
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    return json({ error: error.message }, 500);
+  }
 }
 
 async function fetchClasses(db) {
@@ -347,6 +483,124 @@ async function logAudit(db, { action, actorEmail, targetType, targetId, meta }) 
     .run();
 }
 
+async function handleClassesPost(request, db) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, YearGrp, Teacher_Title, Teacher_FirstName, Teacher_LastName, Teacher_email } = payload;
+
+  if (!name || !YearGrp || !Teacher_Title || !Teacher_LastName || !Teacher_email) {
+    return json({ error: "Required fields missing" }, 400);
+  }
+
+  try {
+    const result = await db
+      .prepare(
+        `INSERT INTO classes (name, YearGrp, Teacher_Title, Teacher_FirstName, Teacher_LastName, Teacher_email)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .bind(name, YearGrp, Teacher_Title, Teacher_FirstName || null, Teacher_LastName, Teacher_email)
+      .run();
+
+    await logAudit(db, {
+      action: "create_class",
+      actorEmail: "admin@school.local",
+      targetType: "class",
+      targetId: result.meta.last_row_id,
+      meta: { name, YearGrp, Teacher_email },
+    });
+
+    return json({ success: true, id: result.meta.last_row_id });
+  } catch (error) {
+    if (error.message.includes("UNIQUE constraint failed")) {
+      return json({ error: "Class name or Teacher email already exists" }, 409);
+    }
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleClassesPut(request, db, classId) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, YearGrp, Teacher_Title, Teacher_FirstName, Teacher_LastName, Teacher_email } = payload;
+
+  if (!name || !YearGrp || !Teacher_Title || !Teacher_LastName || !Teacher_email) {
+    return json({ error: "Required fields missing" }, 400);
+  }
+
+  try {
+    await db
+      .prepare(
+        `UPDATE classes
+         SET name = ?, YearGrp = ?, Teacher_Title = ?, Teacher_FirstName = ?, Teacher_LastName = ?, Teacher_email = ?
+         WHERE id = ?`
+      )
+      .bind(name, YearGrp, Teacher_Title, Teacher_FirstName || null, Teacher_LastName, Teacher_email, classId)
+      .run();
+
+    await logAudit(db, {
+      action: "update_class",
+      actorEmail: "admin@school.local",
+      targetType: "class",
+      targetId: classId,
+      meta: { name, YearGrp, Teacher_email },
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    if (error.message.includes("UNIQUE constraint failed")) {
+      return json({ error: "Class name or Teacher email already exists" }, 409);
+    }
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleClassesDelete(request, db, classId) {
+  try {
+    // Check if class has point entries
+    const { results: entries } = await db
+      .prepare("SELECT 1 FROM point_entries WHERE class_id = ? LIMIT 1")
+      .bind(classId)
+      .all();
+
+    if (entries.length > 0) {
+      return json({ error: "Cannot delete class with existing point entries" }, 400);
+    }
+
+    // Check if class has users
+    const { results: users } = await db
+      .prepare("SELECT 1 FROM users WHERE class_id = ? LIMIT 1")
+      .bind(classId)
+      .all();
+
+    if (users.length > 0) {
+      return json({ error: "Cannot delete class with existing users" }, 400);
+    }
+
+    await db.prepare("DELETE FROM classes WHERE id = ?").bind(classId).run();
+
+    await logAudit(db, {
+      action: "delete_class",
+      actorEmail: "admin@school.local",
+      targetType: "class",
+      targetId: classId,
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    return json({ error: error.message }, 500);
+  }
+}
+
 async function handleEntriesPost(request, db, week) {
   let payload;
   try {
@@ -377,7 +631,7 @@ async function handleEntriesPost(request, db, week) {
     return json({ error: "submittedByEmail is required" }, 400);
   }
 
-  const entryDate = formatDate(new Date());
+  const entryDate = formatDate(getLondonDate());
 
   await db
     .prepare(
@@ -466,6 +720,110 @@ async function handleEntryDelete(request, db, entryId) {
   return json({ deleted: true });
 }
 
+async function fetchTerms(db) {
+  const { results } = await db.prepare("SELECT * FROM terms ORDER BY start_date DESC").all();
+  return results;
+}
+
+async function handleTermsPost(request, db) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, start_date, end_date, is_active } = payload;
+  if (!name || !start_date || !end_date) {
+    return json({ error: "Name, start_date, and end_date are required" }, 400);
+  }
+
+  const isActive = is_active ? 1 : 0;
+
+  try {
+    if (isActive) {
+      await db.prepare("UPDATE terms SET is_active = 0").run();
+    }
+
+    const result = await db
+      .prepare(
+        "INSERT INTO terms (name, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
+      )
+      .bind(name, start_date, end_date, isActive)
+      .run();
+
+    await logAudit(db, {
+      action: "create_term",
+      actorEmail: "admin@school.local",
+      targetType: "term",
+      targetId: result.meta.last_row_id,
+      meta: { name, start_date, end_date, is_active: isActive },
+    });
+
+    return json({ success: true, id: result.meta.last_row_id });
+  } catch (error) {
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleTermsPut(request, db, termId) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const { name, start_date, end_date, is_active } = payload;
+  if (!name || !start_date || !end_date) {
+    return json({ error: "Name, start_date, and end_date are required" }, 400);
+  }
+
+  const isActive = is_active ? 1 : 0;
+
+  try {
+    if (isActive) {
+      await db.prepare("UPDATE terms SET is_active = 0 WHERE id != ?").bind(termId).run();
+    }
+
+    await db
+      .prepare(
+        "UPDATE terms SET name = ?, start_date = ?, end_date = ?, is_active = ? WHERE id = ?"
+      )
+      .bind(name, start_date, end_date, isActive, termId)
+      .run();
+
+    await logAudit(db, {
+      action: "update_term",
+      actorEmail: "admin@school.local",
+      targetType: "term",
+      targetId: termId,
+      meta: { name, start_date, end_date, is_active: isActive },
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    return json({ error: error.message }, 500);
+  }
+}
+
+async function handleTermsDelete(request, db, termId) {
+  try {
+    await db.prepare("DELETE FROM terms WHERE id = ?").bind(termId).run();
+
+    await logAudit(db, {
+      action: "delete_term",
+      actorEmail: "admin@school.local",
+      targetType: "term",
+      targetId: termId,
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    return json({ error: error.message }, 500);
+  }
+}
+
 async function fetchAudit(db, limit) {
   const { results } = await db
     .prepare(
@@ -500,15 +858,74 @@ async function handleApi(request, env, url) {
     return json({ houses });
   }
 
+  if (pathname === "/api/houses" && method === "POST") {
+    return handleHousesPost(request, db);
+  }
+
+  if (pathname.startsWith("/api/houses/") && (method === "PUT" || method === "DELETE")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const houseId = Number(parts[2]);
+    if (!houseId) {
+      return json({ error: "Invalid house id" }, 400);
+    }
+    if (method === "PUT") {
+      return handleHousesPut(request, db, houseId);
+    }
+    if (method === "DELETE") {
+      return handleHousesDelete(request, db, houseId);
+    }
+  }
+
   if (pathname === "/api/classes" && method === "GET") {
     const classes = await fetchClasses(db);
     return json({ classes });
+  }
+
+  if (pathname === "/api/classes" && method === "POST") {
+    return handleClassesPost(request, db);
+  }
+
+  if (pathname.startsWith("/api/classes/") && (method === "PUT" || method === "DELETE")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const classId = Number(parts[2]);
+    if (!classId) {
+      return json({ error: "Invalid class id" }, 400);
+    }
+    if (method === "PUT") {
+      return handleClassesPut(request, db, classId);
+    }
+    if (method === "DELETE") {
+      return handleClassesDelete(request, db, classId);
+    }
   }
 
   if (pathname === "/api/admin/seed" && method === "POST") {
     const housesInserted = await seedDefaultHouses(db);
     const classesInserted = await seedDefaultClasses(db);
     return json({ housesInserted, classesInserted });
+  }
+
+  if (pathname === "/api/terms" && method === "GET") {
+    const terms = await fetchTerms(db);
+    return json({ terms });
+  }
+
+  if (pathname === "/api/terms" && method === "POST") {
+    return handleTermsPost(request, db);
+  }
+
+  if (pathname.startsWith("/api/terms/") && (method === "PUT" || method === "DELETE")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const termId = Number(parts[2]);
+    if (!termId) {
+      return json({ error: "Invalid term id" }, 400);
+    }
+    if (method === "PUT") {
+      return handleTermsPut(request, db, termId);
+    }
+    if (method === "DELETE") {
+      return handleTermsDelete(request, db, termId);
+    }
   }
 
   if (pathname === "/api/weeks/current" && method === "GET") {
@@ -535,13 +952,13 @@ async function handleApi(request, env, url) {
       },
       term: term
         ? {
-            id: term.id,
-            name: term.name,
-            start_date: term.start_date,
-            end_date: term.end_date,
-            is_active: term.is_active,
-            rows: termRows,
-          }
+          id: term.id,
+          name: term.name,
+          start_date: term.start_date,
+          end_date: term.end_date,
+          is_active: term.is_active,
+          rows: termRows,
+        }
         : null,
       term_error: termError,
     });
@@ -609,15 +1026,30 @@ export default {
       }
     }
 
-    // 2) Non-API routes: always SPA fallback to index.html
+    // 2) Non-API routes: serve static assets with SPA fallback
     if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
       return new Response("Assets binding not configured (env.ASSETS missing).", {
         status: 500,
       });
     }
 
-    return env.ASSETS.fetch(
-      new Request("http://internal/index.html", request)
-    );
+    // Try serving the asset directly
+    const assetResponse = await env.ASSETS.fetch(request);
+
+    // If it exists, return it
+    if (assetResponse.status !== 404) {
+      return assetResponse;
+    }
+
+    // If 404, and request is for an HTML page (SPA navigation), return index.html
+    const accept = request.headers.get("accept");
+    if (accept && accept.includes("text/html")) {
+      const indexUrl = new URL(request.url);
+      indexUrl.pathname = "/index.html";
+      return env.ASSETS.fetch(new Request(indexUrl, request));
+    }
+
+    // Otherwise return the 404
+    return assetResponse;
   },
 };
