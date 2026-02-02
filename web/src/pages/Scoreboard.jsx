@@ -1,6 +1,7 @@
 import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
+import { WaffleChart } from "../components/charts/WaffleChart";
 import {
   Bar,
   BarChart,
@@ -917,6 +918,15 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
   const chartRef = useRef(null);
+  const [aiHighlights, setAiHighlights] = useState({});
+  const [valuesData, setValuesData] = useState([]);
+  const [valuesLoading, setValuesLoading] = useState(true);
+  const currentPeriod = activeSlide === 0 ? "week" : "term";
+  const highlightsText = aiHighlights[currentPeriod];
+  const awardCategories = useMemo(() => {
+    const set = new Set(valuesData.map(v => v.award_category));
+    return Array.from(set);
+  }, [valuesData]);
 
   const loadScoreboard = useCallback(
     async ({ showLoading = true } = {}) => {
@@ -1048,6 +1058,58 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     };
   }, [activeSlide]);
 
+  useEffect(() => {
+    if (Object.prototype.hasOwnProperty.call(aiHighlights, currentPeriod)) {
+      return;
+    }
+
+    let isMounted = true;
+
+    fetch(`/api/highlights?period=${currentPeriod}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        setAiHighlights((prev) => ({
+          ...prev,
+          [currentPeriod]: data?.text ?? null,
+        }));
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setAiHighlights((prev) => ({
+          ...prev,
+          [currentPeriod]: null,
+        }));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPeriod, aiHighlights]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setValuesLoading(true);
+
+    fetch(`/api/values-breakdown?period=${currentPeriod}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        setValuesData(data?.data || []);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setValuesData([]);
+      })
+      .finally(() => {
+        if (isMounted) setValuesLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPeriod]);
+
   const thisWeekTotal = useMemo(
     () => (scoreboard.totalsThisWeek || []).reduce((acc, house) => acc + (house.points || 0), 0),
     [scoreboard.totalsThisWeek]
@@ -1085,6 +1147,44 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     () => termRows.reduce((acc, row) => acc + (row.points ?? 0), 0),
     [termRows]
   );
+  const CATEGORY_PALETTE = useMemo(
+    () => ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa", "#f97316", "#22d3ee", "#f43f5e"],
+    []
+  );
+  const categoryColorMap = useMemo(() => {
+    const map = {};
+    let paletteIndex = 0;
+    valuesData.forEach((row) => {
+      const key = row.award_category || "Uncategorised";
+      if (!map[key]) {
+        map[key] = CATEGORY_PALETTE[paletteIndex % CATEGORY_PALETTE.length];
+        paletteIndex += 1;
+      }
+    });
+    return map;
+  }, [valuesData, CATEGORY_PALETTE]);
+  const valuesByHouse = useMemo(() => {
+    const map = {};
+    valuesData.forEach((row) => {
+      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      if (!houseId) return;
+      if (!map[houseId]) {
+        map[houseId] = [];
+      }
+      map[houseId].push({
+        category: row.award_category,
+        points: Number(row.total_points || 0),
+      });
+    });
+    return map;
+  }, [valuesData]);
+  const totalValues = useMemo(() => {
+    const map = {};
+    valuesData.forEach(({ award_category, total_points }) => {
+      map[award_category] = (map[award_category] || 0) + Number(total_points || 0);
+    });
+    return Object.entries(map).map(([category, points]) => ({ category, points }));
+  }, [valuesData]);
 
   const weekAxisMap = useMemo(
     () =>
@@ -1705,6 +1805,92 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           </div>
         </div>
       </div >
+
+      {highlightsText && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-4 w-4 text-yellow-500" />
+            <h2 className="text-lg font-semibold text-slate-900">
+              {currentPeriod === "week" ? "This Week's Highlights" : "Term Highlights"}
+            </h2>
+          </div>
+          <p className="text-sm leading-relaxed text-slate-700">
+            {highlightsText}
+          </p>
+        </div>
+      )}
+
+      {!valuesLoading && Object.keys(valuesByHouse).length > 0 && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+          <div className="mb-3">
+            <div className="flex items-center gap-2">
+              <Heart className="h-5 w-5 text-red-500" />
+              <h3
+                className="highlight-title text-lg font-semibold uppercase tracking-[0.4em]"
+                style={{ ...PLAYFUL_FONT, color: "#ef4444" }}
+              >
+                Living our values through points
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              {currentPeriod === "week" ? "This week" : "This term"} by award category
+            </p>
+          </div>
+
+          <div className="space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center md:gap-10">
+              <div>
+                <h4 className="mb-3 text-sm font-semibold text-slate-700">
+                  Whole school
+                </h4>
+                <WaffleChart
+                  data={totalValues}
+                  colours={categoryColorMap}
+                  size="xl"
+                />
+              </div>
+
+              <div className="mt-4 md:mt-0 space-y-2 text-sm">
+                {awardCategories.map((cat) => (
+                  <div key={cat} className="flex items-center gap-3">
+                    <span
+                      className="inline-block w-3 h-3 rounded-full"
+                      style={{ backgroundColor: categoryColorMap[cat] || "#e5e7eb" }}
+                    />
+                    <span className="capitalize text-slate-700">
+                      {cat}
+                    </span>
+                  </div>
+                ))}
+                <p className="pt-2 text-xs text-slate-500">
+                  Each circle represents 1% of points awarded
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+              {HOUSE_ORDER.map((houseId) => {
+                const house = HOUSES[houseId];
+                const data = valuesByHouse[houseId] || [];
+
+                return (
+                  <div key={houseId} className="space-y-2">
+                    <h5 className="text-sm font-semibold">
+                      {house.name}
+                    </h5>
+
+                    <WaffleChart
+                      data={data}
+                      colours={categoryColorMap}
+                      size="md"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden">
         <div className="mb-4 w-auto flex items-center justify-between">

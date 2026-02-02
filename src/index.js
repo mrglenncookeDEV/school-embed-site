@@ -1,4 +1,6 @@
 import { getCanonicalHouses } from "./config/houses.js";
+import { onRequest as highlights } from "../worker/api/highlights.js";
+import { onRequest as valuesBreakdown } from "../worker/api/values-breakdown.js";
 
 // Durable Object required by your project config
 export class MyDurableObject {
@@ -1073,6 +1075,14 @@ async function handleApi(request, env, url) {
     const limit = Math.min(Math.max(limitParam || 50, 1), 100);
     const audit = await fetchAudit(db, limit);
     return json({ audit });
+  }
+
+  if (pathname === "/api/highlights" && method === "GET") {
+    return highlights({ env, request });
+  }
+
+  if (pathname === "/api/values-breakdown" && method === "GET") {
+    return valuesBreakdown({ env, request });
   }
 
   return json({ error: "Not found" }, 404);
