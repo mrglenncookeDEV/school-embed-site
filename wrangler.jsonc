@@ -10,6 +10,21 @@
   "ai": {
     "binding": "AI"
   },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "triggers": {
+    "crons": ["0 7 * * MON"]
+  },
+  "vars": {
+    "STAFF_REPORT_SECRET": "REPLACE_WITH_LONG_RANDOM_STRING"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "STAFF_EMAILS",
+      "id": "XXXX"
+    }
+  ],
 	"assets": {
 		"directory": "./web/dist",
 		"binding": "ASSETS"

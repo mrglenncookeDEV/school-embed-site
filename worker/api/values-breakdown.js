@@ -68,10 +68,26 @@ const getPeriodRange = async (period, db) => {
   };
 };
 
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr);
+  d.setUTCDate(d.getUTCDate() + days);
+  return formatDate(d);
+};
+
+const getPreviousRange = async (period, db) => {
+  if (period !== "week") return null;
+  const { start, end } = await getPeriodRange("week", db);
+  return {
+    start: addDays(start, -7),
+    end: addDays(end, -7),
+  };
+};
+
 export async function onRequest({ env, request }) {
   try {
     const period = new URL(request.url).searchParams.get("period") === "term" ? "term" : "week";
     const { start, end } = await getPeriodRange(period, env.DB);
+    const previousRange = await getPreviousRange(period, env.DB);
 
     const rows = await env.DB.prepare(
       `SELECT
@@ -85,12 +101,64 @@ export async function onRequest({ env, request }) {
       .bind(start, end)
       .all();
 
+    const yearRows = await env.DB.prepare(
+      `SELECT
+        c.YearGrp AS year_group,
+        pe.award_category,
+        SUM(pe.points) AS total_points
+      FROM point_entries pe
+      JOIN classes c ON c.id = pe.class_id
+      WHERE pe.entry_date BETWEEN ? AND ?
+      GROUP BY c.YearGrp, pe.award_category
+      ORDER BY c.YearGrp ASC`
+    )
+      .bind(start, end)
+      .all();
+
+    let prevHouseRows = { results: [] };
+    let prevYearRows = { results: [] };
+
+    if (previousRange) {
+      prevHouseRows = await env.DB.prepare(
+        `SELECT
+          house_id,
+          award_category,
+          SUM(points) AS total_points
+        FROM point_entries
+        WHERE entry_date BETWEEN ? AND ?
+        GROUP BY house_id, award_category`
+      )
+        .bind(previousRange.start, previousRange.end)
+        .all();
+
+      prevYearRows = await env.DB.prepare(
+        `SELECT
+          c.YearGrp AS year_group,
+          pe.award_category,
+          SUM(pe.points) AS total_points
+        FROM point_entries pe
+        JOIN classes c ON c.id = pe.class_id
+        WHERE pe.entry_date BETWEEN ? AND ?
+        GROUP BY c.YearGrp, pe.award_category
+        ORDER BY c.YearGrp ASC`
+      )
+        .bind(previousRange.start, previousRange.end)
+        .all();
+    }
+
     return json({
       period,
-      data: rows.results || [],
+      current: {
+        houses: rows.results || [],
+        years: yearRows.results || [],
+      },
+      previous: {
+        houses: prevHouseRows.results || [],
+        years: prevYearRows.results || [],
+      },
     });
   } catch (error) {
     console.error("/api/values-breakdown error", error);
-    return json({ period: null, data: [] }, 500);
+    return json({ period: null, current: { houses: [], years: [] }, previous: { houses: [], years: [] } }, 500);
   }
 }

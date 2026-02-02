@@ -2,6 +2,8 @@ export function WaffleChart({
   data = [],
   colours = {},
   size = "md", // "xl" | "lg" | "md" | "sm"
+  frameColour,
+  monochrome = false,
 }) {
   const dimension =
     size === "xl" ? 180 :
@@ -30,25 +32,35 @@ export function WaffleChart({
 
   return (
     <div
-      className="grid gap-1"
+      className="inline-flex items-center justify-center rounded-xl"
       style={{
-        width: dimension,
-        height: dimension,
-        gridTemplateColumns: "repeat(10, 1fr)",
-        gridTemplateRows: "repeat(10, 1fr)",
+        padding: frameColour ? 6 : 0,
+        border: frameColour ? `2px solid ${frameColour}` : "none",
       }}
     >
-      {finalCells.map((cat, i) => (
-        <div
-          key={i}
-          className="rounded-full"
-          style={{
-            backgroundColor: cat
-              ? colours[cat] || "#94a3b8"
-              : "#e5e7eb",
-          }}
-        />
-      ))}
+      <div
+        className="grid gap-1"
+        style={{
+          width: dimension,
+          height: dimension,
+          gridTemplateColumns: "repeat(10, 1fr)",
+          gridTemplateRows: "repeat(10, 1fr)",
+        }}
+      >
+        {finalCells.map((cat, i) => (
+          <div
+            key={i}
+            className="rounded-full"
+            style={{
+              backgroundColor: cat
+                ? monochrome
+                  ? "#111827"
+                  : colours[cat] || "#94a3b8"
+                : "#e5e7eb",
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

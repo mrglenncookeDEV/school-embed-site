@@ -1,7 +1,11 @@
 import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/houses";
 import { WaffleChart } from "../components/charts/WaffleChart";
+import { exportSnapshot } from "../utils/exportSnapshot";
+import { exportAssemblyDeck } from "../utils/exportAssemblyDeck";
+import { renderWaffleImage } from "../utils/renderWaffleImage";
 import {
   Bar,
   BarChart,
@@ -19,6 +23,9 @@ import {
   Shield,
   Crown,
   Heart,
+  Camera,
+  Printer,
+  Presentation,
   Zap,
   Ghost,
   Bird,
@@ -922,8 +929,10 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
   const chartRef = useRef(null);
+  const valuesRef = useRef(null);
   const [aiHighlights, setAiHighlights] = useState({});
-  const [valuesData, setValuesData] = useState([]);
+  const [valuesData, setValuesData] = useState({ houses: [], years: [] });
+  const [previousValuesData, setPreviousValuesData] = useState({ houses: [], years: [] });
   const [valuesLoading, setValuesLoading] = useState(true);
   const [classValuesData, setClassValuesData] = useState([]);
   const [classValuesLoading, setClassValuesLoading] = useState(true);
@@ -934,12 +943,72 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const [showWeekClassBars, setShowWeekClassBars] = useState(false);
   const [showTermClassBars, setShowTermClassBars] = useState(false);
   const [showTermYearBars, setShowTermYearBars] = useState(false);
+  const [valueCaptions, setValueCaptions] = useState({ houses: {}, years: {} });
+  const [deepDive, setDeepDive] = useState(false);
+  const [exporting, setExporting] = useState({ png: false, print: false, slides: false });
   const currentPeriod = activeSlide === 0 ? "week" : "term";
   const highlightsText = aiHighlights[currentPeriod];
+  const housesData = valuesData.houses || valuesData.data || [];
+  const yearsData = valuesData.years || [];
+  const prevHousesData = previousValuesData.houses || [];
+  const prevYearsData = previousValuesData.years || [];
+  const isStaff = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.has("staff") || import.meta.env.VITE_STAFF_MODE === "true";
+  }, []);
+  const loadHtml2Canvas = useCallback(async () => {
+    if (typeof window === "undefined") return null;
+    if (window.html2canvas) return window.html2canvas;
+    try {
+      const mod = await import("../utils/exportSnapshot.js");
+      if (window.html2canvas) return window.html2canvas;
+      if (typeof mod.ensureHtml2Canvas === "function") {
+        return await mod.ensureHtml2Canvas();
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }, []);
+
+  const CATEGORY_PALETTE = useMemo(
+    () => ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa", "#f97316", "#22d3ee", "#f43f5e"],
+    []
+  );
+  const categoryColorMap = useMemo(() => {
+    const map = {};
+    const categories = new Set();
+    housesData.forEach((row) => categories.add(row.award_category || "Uncategorised"));
+    yearsData.forEach((row) => categories.add(row.award_category || "Uncategorised"));
+    Array.from(categories)
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((cat, idx) => {
+        map[cat] = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length];
+      });
+    return map;
+  }, [housesData, yearsData, CATEGORY_PALETTE]);
+
   const awardCategories = useMemo(() => {
-    const set = new Set(valuesData.map(v => v.award_category));
+    const set = new Set();
+    housesData.forEach((v) => set.add(v.award_category));
+    yearsData.forEach((v) => set.add(v.award_category));
     return Array.from(set);
-  }, [valuesData]);
+  }, [housesData, yearsData]);
+  const captionsByHouse = useMemo(() => {
+    const map = {};
+    Object.entries(valueCaptions?.houses || {}).forEach(([key, val]) => {
+      const canonical = resolveHouseKey(key) || resolveHouseKey(Number(key)) || String(key);
+      map[canonical] = val;
+    });
+    return map;
+  }, [valueCaptions]);
+  const captionsByYear = valueCaptions.years || {};
+  const getDominantPct = useCallback((rows) => {
+    const total = rows.reduce((s, r) => s + r.points, 0);
+    if (!total) return 0;
+    return Math.max(...rows.map((r) => r.points / total));
+  }, []);
 
   const renderHouseTooltip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
@@ -1242,11 +1311,19 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
-        setValuesData(data?.data || []);
+        setValuesData({
+          houses: data?.current?.houses || data?.houses || data?.data || [],
+          years: data?.current?.years || data?.years || [],
+        });
+        setPreviousValuesData({
+          houses: data?.previous?.houses || [],
+          years: data?.previous?.years || [],
+        });
       })
       .catch(() => {
         if (!isMounted) return;
-        setValuesData([]);
+        setValuesData({ houses: [], years: [] });
+        setPreviousValuesData({ houses: [], years: [] });
       })
       .finally(() => {
         if (isMounted) setValuesLoading(false);
@@ -1255,6 +1332,18 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     return () => {
       isMounted = false;
     };
+  }, [currentPeriod]);
+
+  useEffect(() => {
+    fetch(`/api/values-captions?period=${currentPeriod}`)
+      .then((res) => res.json())
+      .then((data) =>
+        setValueCaptions({
+          houses: data?.houses || {},
+          years: data?.years || {},
+        })
+      )
+      .catch(() => setValueCaptions({ houses: {}, years: {} }));
   }, [currentPeriod]);
 
   useEffect(() => {
@@ -1317,25 +1406,45 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     () => termRows.reduce((acc, row) => acc + (row.points ?? 0), 0),
     [termRows]
   );
-  const CATEGORY_PALETTE = useMemo(
-    () => ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa", "#f97316", "#22d3ee", "#f43f5e"],
-    []
-  );
-  const categoryColorMap = useMemo(() => {
-    const map = {};
-    let paletteIndex = 0;
-    valuesData.forEach((row) => {
-      const key = row.award_category || "Uncategorised";
-      if (!map[key]) {
-        map[key] = CATEGORY_PALETTE[paletteIndex % CATEGORY_PALETTE.length];
-        paletteIndex += 1;
+  const renderWaffleImage = useCallback(
+    async (data) => {
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.top = "-9999px";
+      container.style.left = "-9999px";
+      document.body.appendChild(container);
+
+      const root = createRoot(container);
+      root.render(
+        <WaffleChart
+          data={data}
+          colours={categoryColorMap}
+          size="xl"
+        />
+      );
+
+      const html2canvas = await loadHtml2Canvas();
+
+      if (!html2canvas) {
+        root.unmount();
+        container.remove();
+        return "";
       }
-    });
-    return map;
-  }, [valuesData, CATEGORY_PALETTE]);
+
+      const canvas = await html2canvas(container, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+      });
+
+      root.unmount();
+      container.remove();
+      return canvas.toDataURL("image/png");
+    },
+    [categoryColorMap, loadHtml2Canvas]
+  );
   const valuesByHouse = useMemo(() => {
     const map = {};
-    valuesData.forEach((row) => {
+    housesData.forEach((row) => {
       const houseId = resolveHouseKey(row.house_id) || row.house_id;
       if (!houseId) return;
       if (!map[houseId]) {
@@ -1347,10 +1456,54 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       });
     });
     return map;
-  }, [valuesData]);
+  }, [housesData]);
+  const prevValuesByHouse = useMemo(() => {
+    const map = {};
+    prevHousesData.forEach((row) => {
+      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      if (!houseId) return;
+      if (!map[houseId]) {
+        map[houseId] = [];
+      }
+      map[houseId].push({
+        category: row.award_category,
+        points: Number(row.total_points || 0),
+      });
+    });
+    return map;
+  }, [prevHousesData]);
+  const houseDominance = useMemo(() => {
+    const map = {};
+    HOUSE_ORDER.forEach((houseId) => {
+      const data = valuesByHouse[houseId] || [];
+      const total = data.reduce((sum, d) => sum + d.points, 0);
+      if (total === 0) {
+        map[houseId] = 0;
+        return;
+      }
+      const maxShare = Math.max(...data.map((d) => d.points / total));
+      map[houseId] = maxShare;
+    });
+    return map;
+  }, [valuesByHouse]);
+  const houseDelta = useMemo(() => {
+    const map = {};
+    HOUSE_ORDER.forEach((houseId) => {
+      const curPct = getDominantPct(valuesByHouse[houseId] || []);
+      const prevPct = getDominantPct(prevValuesByHouse[houseId] || []);
+      map[houseId] = curPct - prevPct;
+    });
+    return map;
+  }, [valuesByHouse, prevValuesByHouse, getDominantPct]);
+  const sortedHouses = useMemo(() => {
+    return [...HOUSE_ORDER].sort((a, b) => {
+      const diff = (houseDominance[b] || 0) - (houseDominance[a] || 0);
+      return diff !== 0 ? diff : HOUSE_ORDER.indexOf(a) - HOUSE_ORDER.indexOf(b);
+    });
+  }, [houseDominance]);
   const houseBreakdown = useMemo(() => {
     const map = {};
-    valuesData.forEach((row) => {
+    housesData.forEach((row) => {
       const rawId = row.house_id;
       const houseId = resolveHouseKey(rawId) || String(rawId ?? "");
       if (!houseId) return;
@@ -1359,7 +1512,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       map[houseId][cat] = (map[houseId][cat] || 0) + Number(row.total_points || 0);
     });
     return map;
-  }, [valuesData]);
+  }, [housesData]);
   const classHouseBreakdown = useMemo(() => {
     const map = {};
     classValuesData.forEach((row) => {
@@ -1385,11 +1538,60 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   }, [classesList, classHouseBreakdown]);
   const totalValues = useMemo(() => {
     const map = {};
-    valuesData.forEach(({ award_category, total_points }) => {
+    housesData.forEach(({ award_category, total_points }) => {
       map[award_category] = (map[award_category] || 0) + Number(total_points || 0);
     });
     return Object.entries(map).map(([category, points]) => ({ category, points }));
-  }, [valuesData]);
+  }, [housesData]);
+  const yearGroupOrder = useMemo(() => {
+    const set = new Set();
+    yearsData.forEach((row) => {
+      const key = row.year_group ?? row.yearGroup ?? row.year ?? null;
+      if (key === null || key === undefined) return;
+      set.add(String(key));
+    });
+    classesList.forEach((cls) => {
+      if (cls.YearGrp === null || cls.YearGrp === undefined) return;
+      set.add(String(cls.YearGrp));
+    });
+    return Array.from(set).sort((a, b) => Number(a) - Number(b));
+  }, [yearsData, classesList]);
+
+  const valuesByYear = useMemo(() => {
+    const map = {};
+    yearsData.forEach((row) => {
+      const key = row.year_group ?? row.yearGroup ?? row.year ?? null;
+      if (key === null || key === undefined) return;
+      if (!map[key]) map[key] = [];
+      map[key].push({
+        category: row.award_category,
+        points: Number(row.total_points || 0),
+      });
+    });
+    return map;
+  }, [yearsData]);
+  const prevValuesByYear = useMemo(() => {
+    const map = {};
+    prevYearsData.forEach((row) => {
+      const key = row.year_group ?? row.yearGroup ?? row.year ?? null;
+      if (key === null || key === undefined) return;
+      if (!map[key]) map[key] = [];
+      map[key].push({
+        category: row.award_category,
+        points: Number(row.total_points || 0),
+      });
+    });
+    return map;
+  }, [prevYearsData]);
+  const yearDelta = useMemo(() => {
+    const map = {};
+    yearGroupOrder.forEach((year) => {
+      const curPct = getDominantPct(valuesByYear[year] || []);
+      const prevPct = getDominantPct(prevValuesByYear[year] || []);
+      map[year] = curPct - prevPct;
+    });
+    return map;
+  }, [yearGroupOrder, valuesByYear, prevValuesByYear, getDominantPct]);
   const valuesByClass = useMemo(() => {
     const base = {};
     classesList.forEach((cls) => {
@@ -1420,6 +1622,15 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
     return base;
   }, [classValuesData, classesList]);
+  const strongestValue = useMemo(() => {
+    if (!totalValues.length) return null;
+    return totalValues.reduce((a, b) => (b.points > a.points ? b : a));
+  }, [totalValues]);
+
+  const TrendArrow = ({ delta }) => {
+    if (Math.abs(delta || 0) < 0.02) return <span className="text-slate-400">→</span>;
+    return delta > 0 ? <span className="text-green-600">↑</span> : <span className="text-red-600">↓</span>;
+  };
   const classTotals = useMemo(() => {
     const map = {};
     classesList.forEach((cls) => {
@@ -2272,7 +2483,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         </div>
       </div >
 
-      {highlightsText && (
+      {(highlightsText !== undefined) && (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-4 w-4 text-yellow-500" />
@@ -2281,31 +2492,119 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
             </h2>
           </div>
           <p className="text-sm leading-relaxed text-slate-700">
-            {highlightsText}
+            {highlightsText || (currentPeriod === "week"
+              ? "I need more teacher notes to produce highlights for this week"
+              : "I need more teacher notes to produce highlights for this term")}
           </p>
         </div>
       )}
 
-      {!valuesLoading && Object.keys(valuesByHouse).length > 0 && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
-          <div className="mb-3">
+      {!valuesLoading && (
+      <div ref={valuesRef} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
             <div className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-red-500" />
-              <h3
-                className="highlight-title text-lg font-semibold uppercase tracking-[0.4em]"
-                style={{ ...PLAYFUL_FONT, color: "#ef4444" }}
-              >
-                Living our values through points
-              </h3>
+                <h3
+                  className="highlight-title text-lg font-semibold uppercase tracking-[0.4em]"
+                  style={{ ...PLAYFUL_FONT, color: "#ef4444" }}
+                >
+                  Living our values through points
+                </h3>
+              </div>
+              <p className="text-sm text-slate-600">
+                {currentPeriod === "week" ? "This week" : "This term"} by award category
+              </p>
             </div>
-            <p className="text-sm text-slate-600">
-              {currentPeriod === "week" ? "This week" : "This term"} by award category
-            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={exporting.png}
+                onClick={async () => {
+                  setExporting((p) => ({ ...p, png: true }));
+                  try {
+                    await exportSnapshot(
+                      valuesRef,
+                      `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`
+                    );
+                  } catch (err) {
+                    console.error("Export PNG failed", err);
+                    alert("Export PNG failed. Please try again.");
+                  } finally {
+                    setExporting((p) => ({ ...p, png: false }));
+                  }
+                }}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
+                  exporting.png ? "bg-slate-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                <Camera className="h-4 w-4" />
+                {exporting.png ? "Creating…" : "Export PNG"}
+                {exporting.png && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
+              </button>
+              <button
+                type="button"
+                disabled={exporting.slides}
+                onClick={async () => {
+                  setExporting((p) => ({ ...p, slides: true }));
+                  try {
+                    await exportAssemblyDeck({
+                      view: currentPeriod,
+                      totalValues,
+                      houses: sortedHouses.map((id) => ({
+                        name: HOUSES[id].name,
+                        data: valuesByHouse[id] || [],
+                        caption: valueCaptions.houses?.[id],
+                      })),
+                      colours: categoryColorMap,
+                    });
+                  } catch (err) {
+                    console.error("Export slides failed", err);
+                    alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
+                  } finally {
+                    setExporting((p) => ({ ...p, slides: false }));
+                  }
+                }}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
+                  exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
+                }`}
+              >
+                <Presentation className="h-4 w-4" />
+                {exporting.slides ? "Building…" : "Export slides"}
+                {exporting.slides && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
+              </button>
+            </div>
+            {isStaff && (
+              <label className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                <input
+                  type="checkbox"
+                  checked={deepDive}
+                  onChange={(e) => setDeepDive(e.target.checked)}
+                />
+                Staff deep-dive
+              </label>
+            )}
           </div>
 
-          <div className="space-y-8">
+            <div className="space-y-8">
             <div className="flex flex-col md:flex-row md:items-center md:gap-10">
               <div>
+                {strongestValue && (
+                  <div
+                    className="inline-flex items-center gap-2 px-4 py-2 mb-3 rounded-full text-sm font-semibold shadow-[0_8px_18px_rgba(0,0,0,0.18)] ring-2 ring-white/70"
+                    style={{
+                      background: `radial-gradient(circle at 30% 20%, #ffffff 0%, #f8fafc 40%, ${categoryColorMap[strongestValue.category] || "#94a3b8"}33 100%)`,
+                      color: categoryColorMap[strongestValue.category] || "#0f172a",
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.18), inset 0 2px 6px rgba(255,255,255,0.9)",
+                    }}
+                  >
+                    <span className="text-lg">✨</span>
+                    <span>
+                      This {currentPeriod === "week" ? "week’s" : "term’s"} strongest value:{" "}
+                      <span className="capitalize">{strongestValue.category}</span>
+                    </span>
+                  </div>
+                )}
                 <h4 className="mb-3 text-sm font-semibold text-slate-700">
                   Whole school
                 </h4>
@@ -2335,24 +2634,97 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-              {HOUSE_ORDER.map((houseId) => {
+              {sortedHouses.map((houseId) => {
                 const house = HOUSES[houseId];
                 const data = valuesByHouse[houseId] || [];
+                const total = data.reduce((s, d) => s + d.points, 0);
 
                 return (
                   <div key={houseId} className="space-y-2">
-                    <h5 className="text-sm font-semibold">
-                      {house.name}
+                    <h5
+                      className="text-sm font-semibold flex items-center gap-2"
+                      style={PLAYFUL_FONT}
+                    >
+                      {house.icon && (
+                        <house.icon className="h-4 w-4" color={house.color} />
+                      )}
+                      <span>{house.name}</span>
                     </h5>
 
                     <WaffleChart
                       data={data}
                       colours={categoryColorMap}
                       size="md"
+                      frameColour={house.color}
                     />
+                    {(captionsByHouse[houseId] || houseDelta[houseId] !== undefined) && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-slate-600">
+                          {data.length === 0 ? "No data" : (captionsByHouse[houseId] || "No data")}
+                        </p>
+                        <TrendArrow delta={houseDelta[houseId]} />
+                      </div>
+                    )}
+                    {deepDive && (
+                      <ul className="text-xs text-slate-500 mt-1 space-y-1">
+                        {data.length === 0 ? (
+                          <li>No data</li>
+                        ) : (
+                          data.map((d) => (
+                            <li key={d.category}>
+                              {d.category}: {total ? Math.round((d.points / total) * 100) : 0}% ({d.points} pts)
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    )}
                   </div>
                 );
               })}
+            </div>
+
+            <div className="mt-8">
+              <h4 className="mb-4 text-sm font-semibold text-slate-700">
+                By year group
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                {yearGroupOrder.map((year) => {
+                  const data = valuesByYear[year] || [];
+                  const total = data.reduce((s, d) => s + d.points, 0);
+                  return (
+                    <div key={year} className="space-y-2">
+                      <h5 className="text-sm font-semibold">Year {year}</h5>
+                      <WaffleChart
+                        data={data}
+                        colours={categoryColorMap}
+                        size="md"
+                        frameColour="#e2e8f0"
+                      />
+                      {(captionsByYear?.[year] || yearDelta[year] !== undefined) && (
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-slate-600">
+                            {data.length === 0 ? "No data" : (captionsByYear?.[year] || "No data")}
+                          </p>
+                          <TrendArrow delta={yearDelta[year]} />
+                        </div>
+                      )}
+                      {deepDive && (
+                        <ul className="text-xs text-slate-500 mt-1 space-y-1">
+                          {data.length === 0 ? (
+                            <li>No data</li>
+                          ) : (
+                            data.map((d) => (
+                              <li key={d.category}>
+                                {d.category}: {total ? Math.round((d.points / total) * 100) : 0}% ({d.points} pts)
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-2">
