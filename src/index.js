@@ -1,6 +1,7 @@
 import { getCanonicalHouses } from "./config/houses.js";
 import { onRequest as highlights } from "../worker/api/highlights.js";
 import { onRequest as valuesBreakdown } from "../worker/api/values-breakdown.js";
+import { onRequest as valuesByClass } from "../worker/api/values-by-class.js";
 
 // Durable Object required by your project config
 export class MyDurableObject {
@@ -1083,6 +1084,10 @@ async function handleApi(request, env, url) {
 
   if (pathname === "/api/values-breakdown" && method === "GET") {
     return valuesBreakdown({ env, request });
+  }
+
+  if (pathname === "/api/values-by-class" && method === "GET") {
+    return valuesByClass({ env, request });
   }
 
   return json({ error: "Not found" }, 404);

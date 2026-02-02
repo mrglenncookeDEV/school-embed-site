@@ -1,6 +1,6 @@
 import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HOUSES, HOUSE_ORDER, resolveHouseKey } from "../config/houses";
+import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/houses";
 import { WaffleChart } from "../components/charts/WaffleChart";
 import {
   Bar,
@@ -705,9 +705,9 @@ function ProgressTrack({
               transform: "translateX(-50%)",
             }}
           />
-        <div className="relative w-full h-[120px] overflow-visible">
-          {renderTrackZone()}
-        </div>
+          <div className="relative w-full h-[120px] overflow-visible">
+            {renderTrackZone()}
+          </div>
           <div className="relative mt-24 h-[56px]">
             {renderBelowTrackElements()}
           </div>
@@ -803,25 +803,29 @@ function TopRoundedBar(props) {
 
   const centerX = x + width / 2;
   const smileyY = y + radius + 8;
+  const smileySize = 16;
 
   return (
     <g>
       <path
         d={path}
         fill={payload?.color ?? fill}
+        stroke="#0f172a"
+        strokeWidth={2}
+        strokeLinejoin="round"
         style={showSmiley ? { animation: "bar-flash 1.2s ease-in-out" } : undefined}
       />
 
       {showSmiley && (
         <>
           <g transform={`translate(${centerX}, ${smileyY})`}>
-            <circle r="11" fill="#facc15" />
-            <ellipse cx="-4" cy="-3" rx="2" ry="3" fill="#000" />
-            <ellipse cx="4" cy="-3" rx="2" ry="3" fill="#000" />
+            <circle r={smileySize} fill="#facc15" stroke="#0f172a" strokeWidth="2" />
+            <ellipse cx={-6} cy={-4} rx={3} ry={4} fill="#0f172a" />
+            <ellipse cx={6} cy={-4} rx={3} ry={4} fill="#0f172a" />
             <path
-              d="M -6 2 Q 0 7 6 2"
-              stroke="#000"
-              strokeWidth="1.6"
+              d={`M ${-smileySize + 4} 4 Q 0 ${smileySize - 2} ${smileySize - 4} 4`}
+              stroke="#0f172a"
+              strokeWidth="2"
               fill="none"
               strokeLinecap="round"
             />
@@ -921,12 +925,140 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const [aiHighlights, setAiHighlights] = useState({});
   const [valuesData, setValuesData] = useState([]);
   const [valuesLoading, setValuesLoading] = useState(true);
+  const [classValuesData, setClassValuesData] = useState([]);
+  const [classValuesLoading, setClassValuesLoading] = useState(true);
+  const [showClassBreakdown, setShowClassBreakdown] = useState(false);
+  const [classesList, setClassesList] = useState([]);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [showWeekYearBars, setShowWeekYearBars] = useState(false);
+  const [showWeekClassBars, setShowWeekClassBars] = useState(false);
+  const [showTermClassBars, setShowTermClassBars] = useState(false);
+  const [showTermYearBars, setShowTermYearBars] = useState(false);
   const currentPeriod = activeSlide === 0 ? "week" : "term";
   const highlightsText = aiHighlights[currentPeriod];
   const awardCategories = useMemo(() => {
     const set = new Set(valuesData.map(v => v.award_category));
     return Array.from(set);
   }, [valuesData]);
+
+  const renderHouseTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || !payload.length) return null;
+    const dataPoint = payload[0]?.payload;
+    const rawHouse = dataPoint?.houseKey ?? dataPoint?.house_id;
+    const houseId = resolveHouseKey(rawHouse) || String(rawHouse ?? "");
+    const breakdown = houseBreakdown[houseId] || {};
+    const items = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const houseName = (getHouseById(houseId)?.name || dataPoint?.house_name || dataPoint?.name || label || "").toString();
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md min-w-[180px]">
+        <div className="font-semibold text-base" style={PLAYFUL_FONT}>
+          {houseName.toUpperCase()}
+        </div>
+        <div className="text-sm font-bold text-slate-900" style={PLAYFUL_FONT}>
+          {dataPoint?.points ?? 0} pts
+        </div>
+        <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          {items.length === 0 && <li className="text-slate-400">No category data</li>}
+          {items.map(([cat, pts]) => (
+            <li key={cat} className="flex items-center gap-2">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: categoryColorMap[cat] || "#cbd5e1" }}
+              />
+              <span className="font-medium capitalize">{cat}</span>
+              <span className="text-slate-500">· {pts} pts</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderClassTooltip = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    const dataPoint = payload[0]?.payload;
+    const classId = dataPoint?.classId;
+    const breakdown = classHouseBreakdown[classId] || {};
+    const items = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const className = (dataPoint?.className || "").toString();
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md min-w-[200px]">
+        <div className="font-semibold text-base" style={PLAYFUL_FONT}>
+          {className.toUpperCase()}
+        </div>
+        <div className="text-sm font-bold text-slate-900" style={PLAYFUL_FONT}>
+          {dataPoint?.points ?? 0} pts
+        </div>
+        <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          {items.length === 0 && <li className="text-slate-400">No house data</li>}
+          {items.map(([houseId, pts]) => {
+            const house = getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            return (
+              <li key={houseId} className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: house.color }}
+                />
+                <span className="font-medium">{house.name}</span>
+                <span className="text-slate-500">· {pts} pts</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderYearTooltip = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    const dataPoint = payload[0]?.payload;
+    const yearLabel = dataPoint?.yearLabel;
+    const breakdown = yearHouseBreakdown[yearLabel] || {};
+    const items = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md min-w-[200px]">
+        <div className="font-semibold text-base" style={PLAYFUL_FONT}>
+          {(yearLabel || "").toUpperCase()}
+        </div>
+        <div className="text-sm font-bold text-slate-900" style={PLAYFUL_FONT}>
+          {dataPoint?.points ?? 0} pts
+        </div>
+        <ul className="mt-2 space-y-1 text-xs text-slate-700">
+          {items.length === 0 && <li className="text-slate-400">No house data</li>}
+          {items.map(([houseId, pts]) => {
+            const house = getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            return (
+              <li key={houseId} className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: house.color }}
+                />
+                <span className="font-medium">{house.name}</span>
+                <span className="text-slate-500">· {pts} pts</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderBarValueLabel = (props) => {
+    const { x, y, width, height, value } = props;
+    if (!width || !height || height < 14) return null;
+    return (
+      <text
+        x={x + width / 2}
+        y={y + height / 2}
+        dy="0.35em"
+        textAnchor="middle"
+        fill="#fff"
+        style={{ ...PLAYFUL_FONT, fontSize: 11, fontWeight: 700 }}
+      >
+        {value}
+      </text>
+    );
+  };
 
   const loadScoreboard = useCallback(
     async ({ showLoading = true } = {}) => {
@@ -970,6 +1102,21 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   useEffect(() => {
     scoreboardMountedRef.current = true;
     loadScoreboard();
+    const loadClasses = async () => {
+      try {
+        setClassesLoading(true);
+        const res = await fetch("/api/classes");
+        const payload = await res.json();
+        if (res.ok) {
+          setClassesList(payload.classes || []);
+        }
+      } catch (_) {
+        // ignore
+      } finally {
+        setClassesLoading(false);
+      }
+    };
+    loadClasses();
 
     const handleRefresh = () => {
       loadScoreboard({ showLoading: false });
@@ -1110,6 +1257,29 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     };
   }, [currentPeriod]);
 
+  useEffect(() => {
+    let isMounted = true;
+    setClassValuesLoading(true);
+
+    fetch(`/api/values-by-class?period=${currentPeriod}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        setClassValuesData(data?.data || []);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setClassValuesData([]);
+      })
+      .finally(() => {
+        if (isMounted) setClassValuesLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPeriod]);
+
   const thisWeekTotal = useMemo(
     () => (scoreboard.totalsThisWeek || []).reduce((acc, house) => acc + (house.points || 0), 0),
     [scoreboard.totalsThisWeek]
@@ -1178,6 +1348,41 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     });
     return map;
   }, [valuesData]);
+  const houseBreakdown = useMemo(() => {
+    const map = {};
+    valuesData.forEach((row) => {
+      const rawId = row.house_id;
+      const houseId = resolveHouseKey(rawId) || String(rawId ?? "");
+      if (!houseId) return;
+      if (!map[houseId]) map[houseId] = {};
+      const cat = row.award_category || "Uncategorised";
+      map[houseId][cat] = (map[houseId][cat] || 0) + Number(row.total_points || 0);
+    });
+    return map;
+  }, [valuesData]);
+  const classHouseBreakdown = useMemo(() => {
+    const map = {};
+    classValuesData.forEach((row) => {
+      const classId = row.class_id;
+      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      if (!classId || !houseId) return;
+      if (!map[classId]) map[classId] = {};
+      map[classId][houseId] = (map[classId][houseId] || 0) + Number(row.total_points || 0);
+    });
+    return map;
+  }, [classValuesData]);
+  const yearHouseBreakdown = useMemo(() => {
+    const map = {};
+    classesList.forEach((cls) => {
+      const yearLabel = cls.YearGrp ? `Year ${cls.YearGrp}` : "Year ?";
+      if (!map[yearLabel]) map[yearLabel] = {};
+      const classBreak = classHouseBreakdown[cls.id] || {};
+      Object.entries(classBreak).forEach(([houseId, pts]) => {
+        map[yearLabel][houseId] = (map[yearLabel][houseId] || 0) + pts;
+      });
+    });
+    return map;
+  }, [classesList, classHouseBreakdown]);
   const totalValues = useMemo(() => {
     const map = {};
     valuesData.forEach(({ award_category, total_points }) => {
@@ -1185,6 +1390,71 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     });
     return Object.entries(map).map(([category, points]) => ({ category, points }));
   }, [valuesData]);
+  const valuesByClass = useMemo(() => {
+    const base = {};
+    classesList.forEach((cls) => {
+      const teacher = [cls.teacherTitle, cls.teacherFirstName, cls.teacherLastName].filter(Boolean).join(" ");
+      base[cls.id] = {
+        className: cls.name,
+        teacher,
+        data: [],
+      };
+    });
+
+    classValuesData.forEach((row) => {
+      const key = row.class_id;
+      if (!key) return;
+      if (!base[key]) {
+        const teacher = [row.teacher_title, row.teacher_first_name, row.teacher_last_name].filter(Boolean).join(" ");
+        base[key] = {
+          className: row.class_name,
+          teacher,
+          data: [],
+        };
+      }
+      base[key].data.push({
+        category: row.award_category,
+        points: Number(row.total_points || 0),
+      });
+    });
+
+    return base;
+  }, [classValuesData, classesList]);
+  const classTotals = useMemo(() => {
+    const map = {};
+    classesList.forEach((cls) => {
+      map[cls.id] = {
+        classId: cls.id,
+        className: cls.name,
+        year: cls.YearGrp,
+        points: 0,
+      };
+    });
+    classValuesData.forEach((row) => {
+      const id = row.class_id;
+      if (!map[id]) {
+        map[id] = { classId: id, className: row.class_name, year: row.YearGrp, points: 0 };
+      }
+      map[id].points += Number(row.total_points || 0);
+    });
+    return Object.values(map).sort((a, b) => b.points - a.points);
+  }, [classValuesData, classesList]);
+  const yearGroupTotals = useMemo(() => {
+    const map = {};
+    classTotals.forEach((cls) => {
+      const yearLabel = cls.year ? `Year ${cls.year}` : "Year ?";
+      if (!map[yearLabel]) {
+        map[yearLabel] = { yearLabel, points: 0 };
+      }
+      map[yearLabel].points += cls.points;
+    });
+    return Object.values(map).sort((a, b) => {
+      const aNum = parseInt(a.yearLabel.replace(/\D/g, ""), 10);
+      const bNum = parseInt(b.yearLabel.replace(/\D/g, ""), 10);
+      if (Number.isNaN(aNum) || Number.isNaN(bNum)) return a.yearLabel.localeCompare(b.yearLabel);
+      return aNum - bNum;
+    });
+  }, [classTotals]);
 
   const weekAxisMap = useMemo(
     () =>
@@ -1597,6 +1867,31 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           {/* SLIDE 1: This Week */}
           <div className="w-full flex-shrink-0 px-1">
             <div className="flex flex-col gap-6">
+              {/* Weekly Total Tile */}
+              {showTotalsPanel && (
+                <div
+                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 shadow-2xl ring-1 ring-white/30 mx-3"
+                  style={{
+                    background: `linear-gradient(135deg, ${WEEK_TITLE_COLOR}, #0f172a)`,
+                    padding: "28px",
+                    boxShadow: "0 20px 55px rgba(15, 23, 42, 0.40)",
+                  }}
+                >
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={PLAYFUL_FONT}
+                  >
+                    This week total
+                  </h2>
+                  <p className="text-4xl font-semibold drop-shadow-sm" style={PLAYFUL_FONT}>
+                    {thisWeekTotal} pts
+                  </p>
+                  <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
+                    Keep adding points before Friday noon.
+                  </p>
+                </div>
+              )}
+
               {/* Chart Card */}
               <div
                 className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -1626,20 +1921,19 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={weekRows}
-                        margin={{ ...BAR_CHART_MARGIN }}
-                        barSize={65}
-                        barCategoryGap="1%"
-                        barGap={1}
+                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                        barCategoryGap="0%"
+                        barGap={0}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="houseKey"
                           tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
                           tickLine={false}
-                          axisLine={false}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                         />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
-                        <Tooltip formatter={(value) => `${value} pts`} />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <Tooltip content={renderYearTooltip} />
                         <Bar
                           dataKey="points"
                           shape={(props) => (
@@ -1654,28 +1948,101 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     </ResponsiveContainer>
                   )}
                 </div>
-              </div>
-
-              {/* Weekly Total Tile */}
-              {showTotalsPanel && (
-                <div
-                  className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
-                  style={{ backgroundColor: WEEK_TITLE_COLOR }}
-                >
-                  <h2
-                    className="highlight-title text-lg uppercase tracking-[0.4em]"
-                    style={PLAYFUL_FONT}
+                <div className="mt-4 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowWeekYearBars((v) => !v)}
+                    className="text-sm font-semibold text-slate-700 flex items-center gap-2 hover:text-slate-900"
                   >
-                    This week total
-                  </h2>
-                  <p className="text-4xl font-semibold" style={PLAYFUL_FONT}>
-                    {thisWeekTotal} pts
-                  </p>
-                  <p className="text-sm" style={PLAYFUL_FONT}>
-                    Keep adding points before Friday noon.
-                  </p>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs">
+                      {showWeekYearBars ? "–" : "+"}
+                    </span>
+                    {showWeekYearBars ? "Hide year breakdown" : "Show year breakdown"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowWeekClassBars((v) => !v)}
+                    className="text-sm font-semibold text-slate-700 flex items-center gap-2 hover:text-slate-900"
+                  >
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs">
+                      {showWeekClassBars ? "–" : "+"}
+                    </span>
+                    {showWeekClassBars ? "Hide class breakdown" : "Show class breakdown"}
+                  </button>
                 </div>
-              )}
+
+                {showWeekYearBars && (
+                  <div className="mt-3 h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={yearGroupTotals}
+                        margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="yearLabel"
+                          height={40}
+                          interval={0}
+                          tick={{ fontSize: 11 }}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                          tickLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <Tooltip content={renderYearTooltip} />
+                        <defs>
+                          <linearGradient id="yearFillWeek" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0b1f3a" stopOpacity="1" />
+                            <stop offset="100%" stopColor="#0b1f3a" stopOpacity="0.7" />
+                          </linearGradient>
+                        </defs>
+                        <Bar
+                          dataKey="points"
+                          fill="url(#yearFillWeek)"
+                          radius={[8, 8, 0, 0]}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          label={renderBarValueLabel}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {showWeekClassBars && (
+                  <div className="mt-3 h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={classTotals}
+                        margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
+                        barCategoryGap="0%"
+                        barGap={0}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="className"
+                          angle={-35}
+                          textAnchor="end"
+                          height={70}
+                          interval={0}
+                          tick={{ fontSize: 10 }}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                          tickLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <Tooltip content={renderClassTooltip} />
+                        <Bar
+                          dataKey="points"
+                          fill="#0ea5e9"
+                          radius={[6, 6, 0, 0]}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          label={renderBarValueLabel}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
 
               {/* Race Track for Week */}
               <ProgressTrack
@@ -1701,6 +2068,31 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           {/* SLIDE 2: This Term */}
           <div className="w-full flex-shrink-0 px-1">
             <div className="flex flex-col gap-6">
+              {/* Term Total Tile */}
+              {showTotalsPanel && (
+                <div
+                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 shadow-2xl ring-1 ring-white/30 mx-3"
+                  style={{
+                    background: "linear-gradient(135deg, #dc2626, #111827)",
+                    padding: "28px",
+                    boxShadow: "0 20px 55px rgba(15, 23, 42, 0.40)",
+                  }}
+                >
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={PLAYFUL_FONT}
+                  >
+                    Current Term Total
+                  </h2>
+                  <p className="text-3xl font-semibold drop-shadow-sm" style={PLAYFUL_FONT}>
+                    {termTotalPoints} pts
+                  </p>
+                  <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
+                    Points earned so far this term.
+                  </p>
+                </div>
+              )}
+
               {/* Chart Card */}
               <div
                 className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -1730,19 +2122,18 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={termRows}
-                        margin={{ ...BAR_CHART_MARGIN }}
-                        barSize={65}
-                        barCategoryGap="1%"
-                        barGap={1}
+                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                        barCategoryGap="0%"
+                        barGap={0}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="houseKey"
                           tick={(props) => <HouseAxisTick {...props} axisMetaMap={termAxisMap} />}
                           tickLine={false}
-                          axisLine={false}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                         />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
                         <Tooltip formatter={(value) => `${value} pts`} />
                         <Bar
                           dataKey="points"
@@ -1758,28 +2149,103 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     </ResponsiveContainer>
                   </div>
                 )}
-              </div>
-
-              {/* Term Total Tile */}
-              {showTotalsPanel && (
-                <div
-                  className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
-                  style={{ backgroundColor: "#dc2626" }}
-                >
-                  <h2
-                    className="highlight-title text-lg uppercase tracking-[0.4em]"
-                    style={PLAYFUL_FONT}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTermYearBars((v) => !v)}
+                    className="text-sm font-semibold text-slate-700 flex items-center gap-2 hover:text-slate-900"
                   >
-                    Current Term Total
-                  </h2>
-                  <p className="text-3xl font-semibold" style={PLAYFUL_FONT}>
-                    {termTotalPoints} pts
-                  </p>
-                  <p className="text-sm" style={PLAYFUL_FONT}>
-                    Points earned so far this term.
-                  </p>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs">
+                      {showTermYearBars ? "–" : "+"}
+                    </span>
+                    {showTermYearBars ? "Hide year-group breakdown" : "Show year-group breakdown"}
+                  </button>
+                </div>
+
+              {showTermYearBars && (
+                <div className="mt-3 h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={yearGroupTotals}
+                      margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="yearLabel"
+                        height={40}
+                        interval={0}
+                        tick={{ fontSize: 11 }}
+                        axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                        tickLine={false}
+                      />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                      <Tooltip content={renderYearTooltip} />
+                      <defs>
+                        <linearGradient id="yearFillTerm" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0b1f3a" stopOpacity="1" />
+                          <stop offset="100%" stopColor="#0b1f3a" stopOpacity="0.7" />
+                        </linearGradient>
+                      </defs>
+                      <Bar
+                        dataKey="points"
+                        fill="url(#yearFillTerm)"
+                        radius={[8, 8, 0, 0]}
+                        stroke="#0f172a"
+                        strokeWidth={2}
+                        label={renderBarValueLabel}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               )}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTermClassBars((v) => !v)}
+                    className="text-sm font-semibold text-slate-700 flex items-center gap-2 hover:text-slate-900"
+                  >
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs">
+                      {showTermClassBars ? "–" : "+"}
+                    </span>
+                    {showTermClassBars ? "Hide class breakdown" : "Show class breakdown"}
+                  </button>
+                </div>
+
+                {showTermClassBars && (
+                  <div className="mt-3 h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={classTotals}
+                        margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
+                        barCategoryGap="0%"
+                        barGap={0}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="className"
+                          angle={-35}
+                          textAnchor="end"
+                          height={70}
+                          interval={0}
+                          tick={{ fontSize: 10 }}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                          tickLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <Tooltip content={renderClassTooltip} />
+                        <Bar
+                          dataKey="points"
+                          fill="#dc2626"
+                          radius={[6, 6, 0, 0]}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          label={renderBarValueLabel}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
 
               {/* Race Track for Term */}
               <ProgressTrack
@@ -1888,6 +2354,39 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 );
               })}
             </div>
+
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowClassBreakdown(!showClassBreakdown)}
+                className="text-sm font-semibold text-slate-700 flex items-center gap-2 hover:text-slate-900"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs">
+                  {showClassBreakdown ? "–" : "+"}
+                </span>
+                {showClassBreakdown ? "Hide class breakdown" : "Show class breakdown"}
+              </button>
+            </div>
+
+            {showClassBreakdown && (
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {Object.values(valuesByClass).map((entry, idx) => (
+                  <div key={`${entry.className}-${idx}`} className="space-y-2">
+                    <h5 className="text-sm font-semibold">
+                      {entry.className}
+                    </h5>
+                    <p className="text-xs text-slate-500">
+                      {entry.teacher}
+                    </p>
+                    <WaffleChart
+                      data={entry.data}
+                      colours={categoryColorMap}
+                      size="md"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
