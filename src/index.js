@@ -414,6 +414,32 @@ async function fetchEntries(db, weekId) {
   return results;
 }
 
+async function fetchAllEntries(db) {
+  const { results } = await db
+    .prepare(
+      `SELECT
+        pe.id,
+        pe.entry_date,
+        pe.points,
+        pe.notes,
+        pe.award_category,
+        pe.submitted_by_email,
+        pe.updated_at,
+        c.id AS class_id,
+        c.name AS class_name,
+        h.id AS house_id,
+        h.name AS house_name,
+        h.color AS house_color
+      FROM point_entries pe
+      JOIN classes c ON c.id = pe.class_id
+      JOIN houses h ON h.id = pe.house_id
+      ORDER BY pe.entry_date DESC, pe.id DESC`
+    )
+    .all();
+
+  return results;
+}
+
 async function fetchEntriesByTerm(db, term) {
   const { results } = await db
     .prepare(
@@ -1014,6 +1040,11 @@ async function handleApi(request, env, url) {
       return json({ entries });
     }
 
+    if (weekParam === "all") {
+      const entries = await fetchAllEntries(db);
+      return json({ entries });
+    }
+
     if (termParam === "current") {
       const term = await fetchActiveTerm(db);
       if (!term) {
@@ -1023,7 +1054,9 @@ async function handleApi(request, env, url) {
       return json({ entries });
     }
 
-    return json({ error: "Either ?week=current or ?term=current is required" }, 400);
+    // Default to returning all entries for compatibility with admin
+    const entries = await fetchAllEntries(db);
+    return json({ entries });
   }
 
   if (pathname.startsWith("/api/entries/") && method === "DELETE") {

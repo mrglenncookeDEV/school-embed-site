@@ -700,20 +700,20 @@ function ProgressTrack({
               left: `${clampedTime * 100}%`,
               top: "-32px",
               width: "1px",
-              height: "220px",
+              height: "250px",
               transform: "translateX(-50%)",
             }}
           />
-          <div className="relative w-full h-[120px] overflow-visible">
-            {renderTrackZone()}
-          </div>
-          <div className="relative mt-12 h-[56px]">
+        <div className="relative w-full h-[120px] overflow-visible">
+          {renderTrackZone()}
+        </div>
+          <div className="relative mt-24 h-[56px]">
             {renderBelowTrackElements()}
           </div>
         </div>
       </div>
       {footer && (
-        <div className="mt-4 border-t border-slate-100 pt-4 flex justify-end">
+        <div className="mt-4 pt-4 flex justify-end">
           {footer}
         </div>
       )}

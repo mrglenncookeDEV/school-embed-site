@@ -146,7 +146,7 @@ export default function Admin() {
     setLoadingEntries(true);
     setError("");
     try {
-      const response = await fetch("/api/entries?week=current");
+      const response = await fetch("/api/entries?week=all");
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load entries");
