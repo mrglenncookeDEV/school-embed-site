@@ -36,6 +36,8 @@ import {
   Flame,
   Wind,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const ICON_MAP = {
@@ -903,6 +905,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     week: null,
     term: null,
   });
+  const [activeSlide, setActiveSlide] = useState(0);
   const [submissions, setSubmissions] = useState([]);
   const [missingClasses, setMissingClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -969,6 +972,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     };
   }, [loadScoreboard]);
 
+
   useEffect(() => {
     if (!showMissing) {
       setMissingClasses([]);
@@ -1004,6 +1008,45 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       isMounted = false;
     };
   }, [showMissing]);
+
+  // Load submissions based on active carousel slide
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSubmissions = async () => {
+      setSubmissionsLoading(true);
+      try {
+        const endpoint = activeSlide === 0
+          ? "/api/entries?week=current"
+          : "/api/entries?term=current";
+
+        const response = await fetch(endpoint);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to load entries");
+        }
+
+        if (isMounted) {
+          setSubmissions(payload.entries || []);
+          setSubmissionsError("");
+        }
+      } catch (err) {
+        if (isMounted) {
+          setSubmissionsError(err.message);
+        }
+      } finally {
+        if (isMounted) {
+          setSubmissionsLoading(false);
+        }
+      }
+    };
+
+    loadSubmissions();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSlide]);
 
   const thisWeekTotal = useMemo(
     () => (scoreboard.totalsThisWeek || []).reduce((acc, house) => acc + (house.points || 0), 0),
@@ -1416,203 +1459,252 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Live scoreboard</p>
           <p className="text-[9px] text-slate-600">Updated: {lastUpdatedLabel}</p>
         </div>
-      </div>
 
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <div
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full"
-          style={weekCardBorderStyle}
-        >
-          <div className="mb-4 space-y-1">
-            <h2
-              className="highlight-title text-lg uppercase tracking-[0.4em]"
-              style={{ ...PLAYFUL_FONT, color: WEEK_TITLE_COLOR }}
+        {/* Navigation Buttons */}
+        <div className="flex gap-2">
+          {activeSlide === 1 && (
+            <button
+              onClick={() => setActiveSlide(0)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:bg-slate-50 shadow-sm"
             >
-              This Week
-            </h2>
-            {weekRangeLabel && (
-              <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
-            )}
-          </div>
-          <div
-            ref={chartRef}
-            className="relative flex-1 min-h-[360px] w-full"
-          >
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading scoreboard…</p>
-            ) : error ? (
-              <p className="text-sm text-rose-600">{error}</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={weekRows}
-                  margin={{ ...BAR_CHART_MARGIN }}
-                  barSize={65}
-                  barCategoryGap="1%"
-                  barGap={1}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="houseKey"
-                    tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip formatter={(value) => `${value} pts`} />
-                  <Bar
-                    dataKey="points"
-                    shape={(props) => (
-                      <TopRoundedBar
-                        {...props}
-                        leadingHouseKey={weekLeadingHouseKey}
-                        highlightHouseKeys={tiedHouseKeys}
-                      />
-                    )}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        <div
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-full"
-          style={termCardBorderStyle}
-        >
-          <div className="mb-4 space-y-1">
-            <h2
-              className="highlight-title text-lg uppercase tracking-[0.4em]"
-              style={{ ...PLAYFUL_FONT, color: TERM_TITLE_COLOR }}
+              <ChevronLeft className="h-5 w-5" />
+              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                This Week
+              </span>
+            </button>
+          )}
+          {activeSlide === 0 && (
+            <button
+              onClick={() => setActiveSlide(1)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:bg-slate-50 shadow-sm"
             >
-              This Term
-            </h2>
-            {termSubtitle && (
-              <p className="text-sm font-semibold text-slate-700">{termSubtitle}</p>
-            )}
-          </div>
-          {loading ? (
-            <p className="text-sm text-slate-500">Loading scoreboard…</p>
-          ) : error ? (
-            <p className="text-sm text-rose-600">{error}</p>
-          ) : termDisabled ? (
-            <div className="flex flex-1 min-h-[360px] w-full items-center justify-center text-sm text-slate-500">
-              No active term
-            </div>
-          ) : (
-            <div className="relative flex-1 min-h-[360px] w-full overflow-visible">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={termRows}
-                  margin={{ ...BAR_CHART_MARGIN }}
-                  barSize={65}
-                  barCategoryGap="1%"
-                  barGap={1}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="houseKey"
-                    tick={(props) => <HouseAxisTick {...props} axisMetaMap={termAxisMap} />}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
-                  <Tooltip formatter={(value) => `${value} pts`} />
-                  <Bar
-                    dataKey="points"
-                    shape={(props) => (
-                      <TopRoundedBar
-                        {...props}
-                        leadingHouseKey={termLeadingHouseKey}
-                        highlightHouseKeys={termTiedHouseKeys}
-                      />
-                    )}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                This Term
+              </span>
+              <ChevronRight className="h-5 w-5" />
+            </button>
           )}
         </div>
       </div>
 
-      {showTotalsPanel && (
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div
-            className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
-            style={{ backgroundColor: WEEK_TITLE_COLOR }}
-          >
-            <h2
-              className="highlight-title text-lg uppercase tracking-[0.4em]"
-              style={PLAYFUL_FONT}
-            >
-              This week total
-            </h2>
-            <p className="text-4xl font-semibold" style={PLAYFUL_FONT}>
-              {thisWeekTotal} pts
-            </p>
-            <p className="text-sm" style={PLAYFUL_FONT}>
-              Keep adding points before Friday noon.
-            </p>
+
+      <div className="relative w-full overflow-hidden">
+        {/* Carousel Tracks */}
+        <div
+          className="flex transition-transform duration-500 ease-in-out will-change-transform"
+          style={{ transform: `translateX(-${activeSlide * 100}%)` }}
+        >
+          {/* SLIDE 1: This Week */}
+          <div className="w-full flex-shrink-0 px-1">
+            <div className="flex flex-col gap-6">
+              {/* Chart Card */}
+              <div
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                style={weekCardBorderStyle}
+              >
+                <div className="mb-4 space-y-1">
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={{ ...PLAYFUL_FONT, color: WEEK_TITLE_COLOR }}
+                  >
+                    This Week
+                  </h2>
+                  {weekRangeLabel && (
+                    <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
+                  )}
+                </div>
+                <div
+                  ref={chartRef}
+                  className="relative w-full"
+                  style={{ height: "400px" }}
+                >
+                  {loading ? (
+                    <p className="text-sm text-slate-500">Loading scoreboard…</p>
+                  ) : error ? (
+                    <p className="text-sm text-rose-600">{error}</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={weekRows}
+                        margin={{ ...BAR_CHART_MARGIN }}
+                        barSize={65}
+                        barCategoryGap="1%"
+                        barGap={1}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="houseKey"
+                          tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
+                        <Tooltip formatter={(value) => `${value} pts`} />
+                        <Bar
+                          dataKey="points"
+                          shape={(props) => (
+                            <TopRoundedBar
+                              {...props}
+                              leadingHouseKey={weekLeadingHouseKey}
+                              highlightHouseKeys={tiedHouseKeys}
+                            />
+                          )}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* Weekly Total Tile */}
+              {showTotalsPanel && (
+                <div
+                  className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
+                  style={{ backgroundColor: WEEK_TITLE_COLOR }}
+                >
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={PLAYFUL_FONT}
+                  >
+                    This week total
+                  </h2>
+                  <p className="text-4xl font-semibold" style={PLAYFUL_FONT}>
+                    {thisWeekTotal} pts
+                  </p>
+                  <p className="text-sm" style={PLAYFUL_FONT}>
+                    Keep adding points before Friday noon.
+                  </p>
+                </div>
+              )}
+
+              {/* Race Track for Week */}
+              <ProgressTrack
+                title="RACE FOR THE WEEK!"
+                subtitle={weekRangeLabel}
+                rows={weekRows}
+                timeProgress={weekTimeProgress}
+                placeholderText="Week data unavailable"
+                highlightHouseKeys={tiedHouseKeys}
+                timePillType="weekday"
+                finishLabel="Finish · Friday 12:00"
+                timePillPrimaryColor={leadingHouseColor}
+                timePillTieColors={tieHouseColors}
+                footer={leadingHouseFooter}
+                titleColor={WEEK_TITLE_COLOR}
+                borderStyle={weekTrackBorderStyle}
+                leaderHouseKey={weekLeadingHouseKey}
+                onFinish={fireConfettiBurst}
+              />
+            </div>
           </div>
-          <div
-            className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
-            style={{ backgroundColor: "#dc2626" }}
-          >
-            <h2
-              className="highlight-title text-lg uppercase tracking-[0.4em]"
-              style={PLAYFUL_FONT}
-            >
-              Current Term Total
-            </h2>
-            <p className="text-3xl font-semibold" style={PLAYFUL_FONT}>
-              {termTotalPoints} pts
-            </p>
-            <p className="text-sm" style={PLAYFUL_FONT}>
-              Points earned so far this term.
-            </p>
+
+          {/* SLIDE 2: This Term */}
+          <div className="w-full flex-shrink-0 px-1">
+            <div className="flex flex-col gap-6">
+              {/* Chart Card */}
+              <div
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                style={termCardBorderStyle}
+              >
+                <div className="mb-4 space-y-1">
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={{ ...PLAYFUL_FONT, color: TERM_TITLE_COLOR }}
+                  >
+                    This Term
+                  </h2>
+                  {termSubtitle && (
+                    <p className="text-sm font-semibold text-slate-700">{termSubtitle}</p>
+                  )}
+                </div>
+                {loading ? (
+                  <p className="text-sm text-slate-500">Loading scoreboard…</p>
+                ) : error ? (
+                  <p className="text-sm text-rose-600">{error}</p>
+                ) : termDisabled ? (
+                  <div className="flex items-center justify-center text-sm text-slate-500" style={{ height: "400px" }}>
+                    No active term
+                  </div>
+                ) : (
+                  <div className="relative w-full" style={{ height: "400px" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={termRows}
+                        margin={{ ...BAR_CHART_MARGIN }}
+                        barSize={65}
+                        barCategoryGap="1%"
+                        barGap={1}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="houseKey"
+                          tick={(props) => <HouseAxisTick {...props} axisMetaMap={termAxisMap} />}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
+                        <Tooltip formatter={(value) => `${value} pts`} />
+                        <Bar
+                          dataKey="points"
+                          shape={(props) => (
+                            <TopRoundedBar
+                              {...props}
+                              leadingHouseKey={termLeadingHouseKey}
+                              highlightHouseKeys={termTiedHouseKeys}
+                            />
+                          )}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* Term Total Tile */}
+              {showTotalsPanel && (
+                <div
+                  className="rounded-3xl border border-slate-200 p-6 shadow-lg text-white text-center flex flex-col items-center gap-3"
+                  style={{ backgroundColor: "#dc2626" }}
+                >
+                  <h2
+                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    style={PLAYFUL_FONT}
+                  >
+                    Current Term Total
+                  </h2>
+                  <p className="text-3xl font-semibold" style={PLAYFUL_FONT}>
+                    {termTotalPoints} pts
+                  </p>
+                  <p className="text-sm" style={PLAYFUL_FONT}>
+                    Points earned so far this term.
+                  </p>
+                </div>
+              )}
+
+              {/* Race Track for Term */}
+              <ProgressTrack
+                title="RACE FOR THE TERM!!!"
+                subtitle={termSubtitle}
+                rows={termRows}
+                timeProgress={termTimeProgress}
+                disabled={termDisabled}
+                placeholderText="No active term"
+                highlightHouseKeys={termTiedHouseKeys}
+                timePillType="date"
+                finishLabel="Finish · 13th Feb"
+                titleColor={TERM_TITLE_COLOR}
+                borderStyle={termTrackBorderStyle}
+                timePillPrimaryColor={termLeadingHouseColor}
+                timePillTieColors={termTieColors}
+                footer={termLeadingHouseFooter}
+                termEndDate={termEndDate}
+                leaderHouseKey={termLeadingHouseKey}
+                onFinish={fireConfettiBurst}
+              />
+            </div>
           </div>
         </div>
-      )}
-
-      <div className="space-y-4">
-        <ProgressTrack
-          title="RACE FOR THE WEEK!"
-          subtitle={weekRangeLabel}
-          rows={weekRows}
-          timeProgress={weekTimeProgress}
-          placeholderText="Week data unavailable"
-          highlightHouseKeys={tiedHouseKeys}
-          timePillType="weekday"
-          finishLabel="Finish · Friday 12:00"
-          timePillPrimaryColor={leadingHouseColor}
-          timePillTieColors={tieHouseColors}
-          footer={leadingHouseFooter}
-          titleColor={WEEK_TITLE_COLOR}
-          borderStyle={weekTrackBorderStyle}
-          leaderHouseKey={weekLeadingHouseKey}
-          onFinish={fireConfettiBurst}
-        />
-        <ProgressTrack
-          title="RACE FOR THE TERM!!!"
-          subtitle={termSubtitle}
-          rows={termRows}
-          timeProgress={termTimeProgress}
-          disabled={termDisabled}
-          placeholderText="No active term"
-          highlightHouseKeys={termTiedHouseKeys}
-          timePillType="date"
-          finishLabel="Finish · 13th Feb"
-          titleColor={TERM_TITLE_COLOR}
-          borderStyle={termTrackBorderStyle}
-          timePillPrimaryColor={termLeadingHouseColor}
-          timePillTieColors={termTieColors}
-          footer={termLeadingHouseFooter}
-          termEndDate={termEndDate}
-          leaderHouseKey={termLeadingHouseKey}
-          onFinish={fireConfettiBurst}
-        />
-      </div>
+      </div >
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm overflow-hidden">
         <div className="mb-4 w-auto flex items-center justify-between">
@@ -1627,7 +1719,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </h2>
               <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 animate-pulse delay-75 flex-shrink-0" />
             </div>
-            <p className="text-sm text-slate-600">Points recorded this week.</p>
+            <p className="text-sm text-slate-600">
+              {activeSlide === 0 ? "Points recorded this week." : "Points recorded this term."}
+            </p>
           </div>
         </div>
 
@@ -1636,7 +1730,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         ) : submissionsError ? (
           <p className="text-sm text-rose-600">{submissionsError}</p>
         ) : submissions.length === 0 ? (
-          <p className="text-sm text-slate-600">No submissions yet this week.</p>
+          <p className="text-sm text-slate-600">
+            {activeSlide === 0 ? "No submissions yet this week." : "No submissions yet this term."}
+          </p>
         ) : (
           <div className="overflow-x-auto overflow-y-auto -mx-6" style={{ maxHeight: "420px" }}>
             <table className="w-full min-w-[700px] table-auto text-sm relative">
@@ -1694,55 +1790,57 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         )}
       </div>
 
-      {showMissing && (
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "500px" }}>
-          <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-red-50 z-10 pb-4">
-            <div>
-              <h2
-                className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500"
-              >
-                Missing submissions
-              </h2>
-              <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
+      {
+        showMissing && (
+          <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "500px" }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-red-50 z-10 pb-4">
+              <div>
+                <h2
+                  className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500"
+                >
+                  Missing submissions
+                </h2>
+                <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
+              </div>
+              <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
+                Weekly flag
+              </span>
             </div>
-            <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
-              Weekly flag
-            </span>
-          </div>
 
-          <div className="overflow-y-auto pr-2">
-            {missingLoading ? (
-              <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
-            ) : missingError ? (
-              <p className="mt-4 text-sm text-rose-600">{missingError}</p>
-            ) : mergedMissingClasses.length === 0 ? (
-              <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
-            ) : (
-              <ul className="mt-4 grid gap-3">
-                {mergedMissingClasses.map((klass) => (
-                  <li
-                    key={klass.id}
-                    className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-red-700">{klass.name}</p>
-                      <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
-                        {klass.reason ?? "Missing"}
-                      </span>
-                    </div>
-                    {klass.teacherDisplayName || klass.teacher_email ? (
-                      <p className="mt-2 text-xs text-red-500">
-                        {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="overflow-y-auto pr-2">
+              {missingLoading ? (
+                <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
+              ) : missingError ? (
+                <p className="mt-4 text-sm text-rose-600">{missingError}</p>
+              ) : mergedMissingClasses.length === 0 ? (
+                <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
+              ) : (
+                <ul className="mt-4 grid gap-3">
+                  {mergedMissingClasses.map((klass) => (
+                    <li
+                      key={klass.id}
+                      className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-red-700">{klass.name}</p>
+                        <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
+                          {klass.reason ?? "Missing"}
+                        </span>
+                      </div>
+                      {klass.teacherDisplayName || klass.teacher_email ? (
+                        <p className="mt-2 text-xs text-red-500">
+                          {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </section>
+        )
+      }
+    </section >
   );
 }
 

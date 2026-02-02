@@ -414,6 +414,35 @@ async function fetchEntries(db, weekId) {
   return results;
 }
 
+async function fetchEntriesByTerm(db, term) {
+  const { results } = await db
+    .prepare(
+      `SELECT
+        pe.id,
+        pe.entry_date,
+        pe.points,
+        pe.notes,
+        pe.award_category,
+        pe.submitted_by_email,
+        pe.updated_at,
+        c.id AS class_id,
+        c.name AS class_name,
+        h.id AS house_id,
+        h.name AS house_name,
+        h.color AS house_color
+      FROM point_entries pe
+      JOIN classes c ON c.id = pe.class_id
+      JOIN houses h ON h.id = pe.house_id
+      JOIN weeks w ON w.id = pe.week_id
+      WHERE w.week_start BETWEEN ? AND ?
+      ORDER BY pe.entry_date DESC, pe.id DESC`
+    )
+    .bind(term.start_date, term.end_date)
+    .all();
+
+  return results;
+}
+
 async function countRows(db, table) {
   const { results } = await db.prepare(`SELECT COUNT(*) AS total FROM ${table}`).all();
   return Number(results[0]?.total ?? 0);
@@ -977,12 +1006,24 @@ async function handleApi(request, env, url) {
 
   if (pathname === "/api/entries" && method === "GET") {
     const weekParam = url.searchParams.get("week");
-    if (weekParam !== "current") {
-      return json({ error: "Only ?week=current is supported" }, 400);
+    const termParam = url.searchParams.get("term");
+
+    if (weekParam === "current") {
+      const week = await ensureCurrentWeek(db);
+      const entries = await fetchEntries(db, week.id);
+      return json({ entries });
     }
-    const week = await ensureCurrentWeek(db);
-    const entries = await fetchEntries(db, week.id);
-    return json({ entries });
+
+    if (termParam === "current") {
+      const term = await fetchActiveTerm(db);
+      if (!term) {
+        return json({ error: "No active term" }, 404);
+      }
+      const entries = await fetchEntriesByTerm(db, term);
+      return json({ entries });
+    }
+
+    return json({ error: "Either ?week=current or ?term=current is required" }, 400);
   }
 
   if (pathname.startsWith("/api/entries/") && method === "DELETE") {
