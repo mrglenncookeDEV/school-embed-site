@@ -5,7 +5,6 @@ import { createRoot } from "react-dom/client";
 import houseBadge from "../assets/house_gold.png";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/houses";
 import { WaffleChart } from "../components/charts/WaffleChart";
-import { exportSnapshot } from "../utils/exportSnapshot";
 import { exportAssemblyDeck } from "../utils/exportAssemblyDeck";
 import {
   Bar,
@@ -25,7 +24,6 @@ import {
   Shield,
   Crown,
   Heart,
-  Camera,
   Printer,
   Presentation,
   Zap,
@@ -1006,8 +1004,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
   const chartRef = useRef(null);
   const weekChartRef = useRef(null);
   const termChartRef = useRef(null);
-  const weekTrackRef = useRef(null);
-  const termTrackRef = useRef(null);
   const valuesRef = useRef(null);
   const [aiHighlights, setAiHighlights] = useState({});
   const [valuesData, setValuesData] = useState({ houses: [], years: [] });
@@ -1025,13 +1021,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
   const [valueCaptions, setValueCaptions] = useState({ houses: {}, years: {} });
   const [deepDive, setDeepDive] = useState(false);
   const [exporting, setExporting] = useState({ png: false, slides: false });
-  const [exportBusy, setExportBusy] = useState({
-    weekChart: false,
-    termChart: false,
-    weekTrack: false,
-    termTrack: false,
-    values: false,
-  });
   const currentPeriod = activeSlide === 0 ? "week" : "term";
   const highlightsText = aiHighlights[currentPeriod];
   const housesData = useMemo(
@@ -1094,20 +1083,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
     if (!total) return 0;
     return Math.max(...rows.map((r) => r.points / total));
   }, []);
-  const runPngExport = useCallback(
-    async (key, ref, filename) => {
-      setExportBusy((p) => ({ ...p, [key]: true }));
-      try {
-        await exportSnapshot(ref, filename, { hideSelectors: ".no-export" });
-      } catch (err) {
-        console.error(`Export PNG failed (${key})`, err);
-        alert("Export PNG failed. Please try again.");
-      } finally {
-        setExportBusy((p) => ({ ...p, [key]: false }));
-      }
-    },
-    []
-  );
   const normaliseValues = useCallback((rows = []) => {
     const map = Object.fromEntries(CANONICAL_VALUES.map((v) => [v, 0]));
     rows.forEach((r) => {
@@ -2290,25 +2265,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 style={weekCardBorderStyle}
               >
                 <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
-                  <button
-                    disabled={exportBusy.weekChart}
-                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
-                      exportBusy.weekChart ? "opacity-70 cursor-wait" : ""
-                    }`}
-                    onClick={() =>
-                      runPngExport(
-                        "weekChart",
-                        weekChartRef,
-                        `week-houses-${new Date().toISOString().slice(0, 10)}.png`
-                      )
-                    }
-                  >
-                    <Camera className="h-4 w-4" />
-                    {exportBusy.weekChart ? "Processing…" : "Export PNG"}
-                    {exportBusy.weekChart && (
-                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
-                    )}
-                  </button>
+
                 </div>
                 <div className="mb-4 space-y-1">
                   <h2
@@ -2471,27 +2428,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
               {/* Race Track for Week */}
 
-                <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
-                  <button
-                    disabled={exportBusy.weekTrack}
-                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
-                      exportBusy.weekTrack ? "opacity-70 cursor-wait" : ""
-                    }`}
-                    onClick={() =>
-                      runPngExport(
-                        "weekTrack",
-                        weekTrackRef,
-                        `week-track-${new Date().toISOString().slice(0, 10)}.png`
-                      )
-                    }
-                  >
-                    <Camera className="h-4 w-4" />
-                    {exportBusy.weekTrack ? "Processing…" : "Export PNG"}
-                    {exportBusy.weekTrack && (
-                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
-                    )}
-                  </button>
-                </div>
                   <ProgressTrack
                     title="RACE FOR THE WEEK!"
                     subtitle={weekRangeLabel}
@@ -2549,27 +2485,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
                 style={termCardBorderStyle}
               >
-                <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
-                  <button
-                    disabled={exportBusy.termChart}
-                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
-                      exportBusy.termChart ? "opacity-70 cursor-wait" : ""
-                    }`}
-                    onClick={() =>
-                      runPngExport(
-                        "termChart",
-                        termChartRef,
-                        `term-houses-${new Date().toISOString().slice(0, 10)}.png`
-                      )
-                    }
-                  >
-                    <Camera className="h-4 w-4" />
-                    {exportBusy.termChart ? "Processing…" : "Export PNG"}
-                    {exportBusy.termChart && (
-                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
-                    )}
-                  </button>
-                </div>
                 <div className="mb-4 space-y-1">
                   <h2
                     className="highlight-title text-lg uppercase tracking-[0.4em]"
@@ -2731,27 +2646,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
               {/* Race Track for Term */}
 
-                  <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
-                    <button
-                      disabled={exportBusy.termTrack}
-                      className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
-                        exportBusy.termTrack ? "opacity-70 cursor-wait" : ""
-                      }`}
-                      onClick={() =>
-                        runPngExport(
-                          "termTrack",
-                          termTrackRef,
-                          `term-track-${new Date().toISOString().slice(0, 10)}.png`
-                        )
-                      }
-                    >
-                      <Camera className="h-4 w-4" />
-                      {exportBusy.termTrack ? "Processing…" : "Export PNG"}
-                      {exportBusy.termTrack && (
-                        <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
-                      )}
-                    </button>
-                  </div>
                   <ProgressTrack
                     title="RACE FOR THE TERM!!!"
                     subtitle={termSubtitle}
@@ -2808,24 +2702,6 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       {!valuesLoading && (
         <div ref={valuesRef} className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
         <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
-          <button
-            type="button"
-            disabled={exportBusy.values}
-            onClick={() =>
-              runPngExport(
-                "values",
-                valuesRef,
-                `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`
-              )
-            }
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
-              exportBusy.values ? "bg-slate-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
-            } no-export`}
-          >
-            <Camera className="h-4 w-4" />
-            {exportBusy.values ? "Processing…" : "Export PNG"}
-            {exportBusy.values && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
-          </button>
           <button
             type="button"
             disabled={exporting.slides}
@@ -2925,61 +2801,64 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
           </div>
 
             <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-8 md:gap-12 items-start">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-4">
-                  <h3 className="text-lg font-semibold text-slate-700">
-                    Whole school
-                  </h3>
-                  <div className="waffle-grid">
-                    <WaffleChart
-                      data={totalValues}
-                      colours={categoryColorMap}
-                      size="xl"
-                    />
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-12 items-start">
+              <div className="flex flex-col gap-3">
+                <h3 className="text-lg font-semibold text-slate-700">
+                  Whole school
+                </h3>
+                <div className="waffle-grid-start rounded-2xl border-2 border-blue-700 p-4">
+                  <WaffleChart
+                    data={totalValues}
+                    colours={categoryColorMap}
+                    size="xl"
+                  />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 pt-[calc(1.75rem+0.5rem)] text-sm">
-                {awardCategories.map((cat) => (
-                  <div key={cat} className="flex gap-3 items-start">
-                    <span
-                      className="inline-block w-3 h-3 rounded-full"
-                      style={{ backgroundColor: categoryColorMap[cat] || "#e5e7eb" }}
-                    />
-                    <span className="capitalize text-slate-700">
-                      {cat}
-                    </span>
-                  </div>
-                ))}
-                <p className="pt-2 text-xs text-slate-500">
-                  Each circle represents 1% of points awarded
-                </p>
-              </div>
-
-              {strongestValue && (
-                <div className="flex flex-col gap-2 pt-[calc(1.75rem+0.5rem)]">
-                  <div
-                    className="rounded-3xl border px-4 py-2.5 text-sm font-semibold shadow-[0_12px_18px_rgba(15,23,42,0.35)]"
-                    style={{
-                      background: "linear-gradient(135deg, #fef3c7 0%, #d4af37 60%, #a0711c 100%)",
-                      borderColor: "#c49117",
-                      color: "#0f172a",
-                      boxShadow: "0 15px 30px rgba(15,23,42,0.45), inset 0 1px 5px rgba(255,255,255,0.5)",
-                    }}
-                  >
-                    <span className="text-base leading-snug flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-600" />
-                      <span>
-                        This {currentPeriod === "week" ? "week’s" : "term’s"} strongest value:{" "}
-                        <span className="capitalize">{strongestValue.category}</span>
-                      </span>
-                    </span>
+              <div className="flex flex-col gap-3">
+                <div aria-hidden className="h-[1.75rem]" />
+                <div className="waffle-grid-start">
+                  <div className="flex flex-col gap-3 items-start text-sm">
+                    <p className="pt-2 text-xs text-slate-500">
+                      Each circle represents 1% of points awarded
+                    </p>
+                    {awardCategories.map((cat) => (
+                      <div key={cat} className="flex gap-3 items-start">
+                        <span
+                          className="inline-block w-3 h-3 rounded-full"
+                          style={{ backgroundColor: categoryColorMap[cat] || "#e5e7eb" }}
+                        />
+                        <span className="capitalize text-slate-700">
+                          {cat}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
+
+            {strongestValue && (
+              <div className="flex flex-col gap-2">
+                <div
+                  className="rounded-3xl border px-4 py-2.5 text-sm font-semibold shadow-[0_12px_18px_rgba(15,23,42,0.35)]"
+                  style={{
+                    background: "linear-gradient(135deg, #fef3c7 0%, #d4af37 60%, #a0711c 100%)",
+                    borderColor: "#c49117",
+                    color: "#0f172a",
+                    boxShadow: "0 15px 30px rgba(15,23,42,0.45), inset 0 1px 5px rgba(255,255,255,0.5)",
+                  }}
+                >
+                  <span className="text-base leading-snug flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-600" />
+                    <span>
+                      This {currentPeriod === "week" ? "week’s" : "term’s"} strongest value:{" "}
+                      <span className="capitalize">{strongestValue.category}</span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
               {sortedHouses.map((houseId) => {

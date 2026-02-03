@@ -176,12 +176,6 @@ function AppContent() {
     { label: "Submit Points", action: () => openTeacherSubmit(null) },
     { label: "Admin", to: "/admin" },
   ];
-  const reportLinks = [
-    { label: "Staff / Ofsted report", to: "/reports/staff" },
-    { label: "Parent-safe report", to: "/reports/parents" },
-    { label: "Weekly staff PDF", to: "/reports/weekly-pdf" },
-    { label: "Print-friendly PDF", to: "/reports/print-pdf" },
-  ];
   useEffect(() => {
     const handleClick = () => setReportsOpen(false);
     window.addEventListener("click", handleClick);
@@ -239,10 +233,15 @@ function AppContent() {
             </div>
 
             <nav className="flex flex-wrap items-center gap-3 text-sm font-medium sm:flex-nowrap">
-              <div className="relative" onClick={(event) => event.stopPropagation()}>
+              <div
+                className="relative"
+                onClick={(event) => event.stopPropagation()}
+                onMouseEnter={() => setReportsOpen(true)}
+                onMouseLeave={() => setReportsOpen(false)}
+              >
                 <button
                   type="button"
-                  onClick={() => setReportsOpen((open) => !open)}
+                  onMouseEnter={() => setReportsOpen(true)}
                   className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900 flex items-center gap-1"
                 >
                   Reports
@@ -253,17 +252,8 @@ function AppContent() {
                     className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <div className="flex flex-col">
-                      {reportLinks.map((link) => (
-                        <NavLink
-                          key={link.to}
-                          to={link.to}
-                          className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          onClick={() => setReportsOpen(false)}
-                        >
-                          {link.label}
-                        </NavLink>
-                      ))}
+                    <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50">
+                      In Development...
                     </div>
                   </div>
                 )}
