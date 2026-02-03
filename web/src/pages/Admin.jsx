@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getHouseById } from "../config/houses";
 import {
   Pencil,
@@ -84,6 +84,10 @@ export default function Admin() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [activeTab, setActiveTab] = useState("setup");
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [missingClasses, setMissingClasses] = useState([]);
+  const [missingLoading, setMissingLoading] = useState(false);
+  const [missingError, setMissingError] = useState("");
 
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
@@ -211,6 +215,23 @@ export default function Admin() {
     }
   };
 
+  const loadMissingClasses = useCallback(async () => {
+    setMissingLoading(true);
+    setMissingError("");
+    try {
+      const response = await fetch("/api/missing/current");
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load missing submissions");
+      }
+      setMissingClasses(payload.classes || []);
+    } catch (err) {
+      setMissingError(err.message);
+    } finally {
+      setMissingLoading(false);
+    }
+  }, []);
+
   const loadTerms = async () => {
     setLoadingTerms(true);
     try {
@@ -250,6 +271,12 @@ export default function Admin() {
     loadTerms();
     loadAudit();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "missing") {
+      loadMissingClasses();
+    }
+  }, [activeTab, loadMissingClasses]);
 
   const handleDelete = async (id) => {
     setDeletingId(id);
@@ -560,47 +587,160 @@ export default function Admin() {
     setIsTermModalOpen(true);
   };
 
+  const tabTitles = {
+    missing: "Missing submissions",
+    entries: "Manage Entries",
+    setup: "Settings",
+  };
+  const tabSubtitles = {
+    missing: "Keep track of classes that still need to submit house points.",
+    entries: "Review this week’s submissions and audit trail.",
+    setup: "Configure school houses, classes, and site settings.",
+  };
+  const headerTitle = tabTitles[activeTab] ?? "Admin";
+  const headerSubtitle = tabSubtitles[activeTab] ?? "";
+  const tabs = [
+    { key: "missing", label: "Missing submissions" },
+    { key: "entries", label: "Manage Entries" },
+    { key: "setup", label: "Settings" },
+  ];
+  const missingTeacherEmails = useMemo(() => {
+    const emails = new Set();
+    missingClasses.forEach((klass) => {
+      const email =
+        klass.teacher_email ||
+        klass.teacherEmail ||
+        klass.teacher_email_address ||
+        klass.teacherEmailAddress ||
+        klass.teacherEmailAdress;
+      if (email) {
+        emails.add(String(email).trim());
+      }
+    });
+    return Array.from(emails);
+  }, [missingClasses]);
+  const remindMailtoLink = useMemo(() => {
+    if (!missingTeacherEmails.length) return null;
+    const subject = "Reminder: Please submit your house points";
+    const bodyLines = [
+      "Hi there,",
+      "",
+      "Friendly reminder to submit your house points before Friday noon.",
+      "",
+      "Classes still outstanding:",
+      ...missingClasses.map(
+        (klass) =>
+          `- ${klass.name}${klass.teacherDisplayName ? ` (${klass.teacherDisplayName})` : ""}`
+      ),
+      "",
+      "Thanks!",
+    ];
+    const body = bodyLines.join("\n");
+    return `mailto:${missingTeacherEmails.join(
+      ","
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [missingClasses, missingTeacherEmails]);
+  const missingCount = missingClasses.length;
+  const missingHeadline = missingLoading
+    ? "Checking for outstanding submissions…"
+    : missingError
+      ? missingError
+      : missingCount === 0
+        ? "Great job—no classes are missing yet."
+        : `${missingCount} class${missingCount === 1 ? "" : "es"} ${missingCount === 1 ? "has not" : "have not"
+        } submitted this week`;
+
   return (
     <section className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Admin</p>
-        <h1 className="text-3xl font-bold text-slate-900">
-          {activeTab === "entries" ? "Manage Entries" : "Settings"}
-        </h1>
-        <p className="text-sm text-slate-600">
-          {activeTab === "entries"
-            ? "Review this week’s submissions and audit trail."
-            : "Configure school houses, classes, and site settings."}
-        </p>
-      </div>
-
-      <div className="mb-6 border-b border-slate-200 dark:border-white/10">
-        <div className="flex gap-6 text-sm font-medium">
-          <button
-            onClick={() => setActiveTab("entries")}
-            className={`pb-3 border-b-2 transition ${activeTab === "entries"
-              ? "border-slate-900 dark:border-white"
-              : "border-transparent text-slate-500"
-              }`}
-          >
-            Manage Entries
-          </button>
-
-          <button
-            onClick={() => setActiveTab("setup")}
-            className={`pb-3 border-b-2 transition ${activeTab === "setup"
-              ? "border-slate-900 dark:border-white"
-              : "border-transparent text-slate-500"
-              }`}
-          >
-            Settings
-          </button>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Admin</p>
+          <h1 className="text-3xl font-bold text-slate-900">
+            {headerTitle}
+          </h1>
+          <p className="text-sm text-slate-600">
+            {headerSubtitle}
+          </p>
         </div>
-      </div>
+
+        <div className="mb-6 border-b border-slate-200 dark:border-white/10">
+          <div className="flex gap-6 text-sm font-medium">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`pb-3 border-b-2 transition ${activeTab === tab.key
+                  ? "border-slate-900 dark:border-white"
+                  : "border-transparent text-slate-500"
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
       {actionMessage && (
         <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-sm">
           {actionMessage}
+        </div>
+      )}
+
+      {activeTab === "missing" && (
+        <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "500px" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-red-50 z-10 pb-4">
+            <div>
+              <h2 className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500">
+                Missing submissions
+              </h2>
+              <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
+                Weekly flag
+              </span>
+              {remindMailtoLink && (
+                <a
+                  href={remindMailtoLink}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700 transition hover:bg-red-50"
+                >
+                  Remind Teachers
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="overflow-y-auto pr-2">
+            {missingLoading ? (
+              <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
+            ) : missingError ? (
+              <p className="mt-4 text-sm text-rose-600">{missingError}</p>
+            ) : missingClasses.length === 0 ? (
+              <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
+            ) : (
+              <ul className="mt-4 grid gap-3">
+                {missingClasses.map((klass) => (
+                  <li
+                    key={klass.id || klass.name}
+                    className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-red-700">{klass.name}</p>
+                      <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
+                        Missing
+                      </span>
+                    </div>
+                    {klass.teacherDisplayName || klass.teacher_email ? (
+                      <p className="mt-2 text-xs text-red-500">
+                        {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 
@@ -663,15 +803,17 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredEntries.map((entry) => {
-                      const houseId = entry.house_id || entry.houseId;
-                      const houseMeta = getHouseById(houseId);
-                      const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
-                      const HouseIcon = houseMeta?.icon;
-                      const houseLabel = houseMeta?.name ?? entry.house_name;
-                      return (
-                        <tr key={entry.id}>
-                          <td className="px-3 py-3 font-semibold text-slate-900">{entry.class_name}</td>
+                {filteredEntries.map((entry) => {
+                  const houseId = entry.house_id || entry.houseId;
+                  const houseMeta = getHouseById(houseId);
+                  const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
+                  const HouseIcon = houseMeta?.icon;
+                  const houseLabel = houseMeta?.name ?? entry.house_name;
+                  const teacherLabel = entry.teacherDisplayName || entry.submitted_by_email || "—";
+                  const submittedByLabel = `${entry.class_name}${teacherLabel ? ` · ${teacherLabel}` : ""}`;
+                  return (
+                    <tr key={entry.id}>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{entry.class_name}</td>
                           <td className="px-3 py-3">
                             <span className="flex items-center gap-2">
                               <span
@@ -688,7 +830,7 @@ export default function Admin() {
                           </td>
                           <td className="px-3 py-3 font-semibold text-slate-900">{entry.points}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.award_category || "General"}</td>
-                          <td className="px-3 py-3 text-slate-600">{entry.submitted_by_email}</td>
+                          <td className="px-3 py-3 text-slate-600">{submittedByLabel}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.entry_date}</td>
                           <td className="px-3 py-3 text-slate-600">{entry.notes || "—"}</td>
                           <td className="px-3 py-3">
@@ -1380,48 +1522,6 @@ export default function Admin() {
           </div>
         )
       }
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold mb-4">
-          Reports & Exports
-        </h2>
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-          <button
-            type="button"
-            onClick={() => openReport("staff")}
-            className="rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-800"
-          >
-            Staff / Ofsted values report
-          </button>
-          <button
-            type="button"
-            onClick={() => openReport("parents")}
-            className="rounded-full bg-slate-200 text-slate-900 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-300"
-          >
-            Parent-safe values report
-          </button>
-          <button
-            type="button"
-            onClick={() => openReport("staff", "&format=pdf")}
-            className="rounded-full bg-indigo-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-indigo-500"
-          >
-            Weekly PDF (staff)
-          </button>
-          <button
-            type="button"
-            onClick={() => openReport("staff", "&format=pdf&monochrome=true")}
-            className="rounded-full bg-slate-700 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-600"
-          >
-            Print-friendly PDF
-          </button>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("export-assembly-ppt"))}
-            className="rounded-full bg-orange-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-orange-500"
-          >
-            Assembly slides (PPT)
-          </button>
-        </div>
-      </section>
     </section>
   );
 }

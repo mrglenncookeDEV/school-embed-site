@@ -93,8 +93,43 @@ const getPeriodRange = async (period, db) => {
   return [formatDate(weekStart), formatDate(weekEnd)];
 };
 
+const sanitizeCaption = (text) => {
+  if (!text) return text;
+  return text
+    .replace(
+      /^here is a short positive sentence for each house describing which value was most emphasised:\s*/i,
+      ""
+    )
+    .replace(
+      /^here is a short positive sentence describing which value was most emphasised:\s*/i,
+      ""
+    )
+    .trim();
+};
+
 export async function onRequest({ env, request }) {
   try {
+    const safeRunAI = async (systemPrompt, userPrompt) => {
+      if (!env.AI?.run) return null;
+      try {
+        const res = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: 20,
+        });
+        return res.response?.trim() || null;
+      } catch (err) {
+        // Local dev (Miniflare) cannot execute AI; fall back silently.
+        if (String(err?.message || "").includes("needs to be run remotely")) {
+          return null;
+        }
+        console.error("values-captions AI error (safeRunAI)", err);
+        return null;
+      }
+    };
+
     const period = new URL(request.url).searchParams.get("period") === "term" ? "term" : "week";
     const [start, end] = await getPeriodRange(period, env.DB);
 
@@ -153,25 +188,11 @@ export async function onRequest({ env, request }) {
 
       const houseName = houseNameMap[houseId] || `House ${houseId}`;
 
-      if (!env.AI) {
-        houseCaptions[houseId] = `${houseName} showed strong ${top.category?.toLowerCase() || "teamwork"} this ${period}.`;
-        continue;
-      }
-
-      try {
-        const prompt = `${houseName}: ${top.category}`;
-        const res = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 20,
-        });
-        houseCaptions[houseId] = res.response?.trim() || null;
-      } catch (err) {
-        console.error("values-captions AI error", err);
-        houseCaptions[houseId] = `${houseName} celebrated ${top.category?.toLowerCase() || "values"} this ${period}.`;
-      }
+      const rawAiText = await safeRunAI(SYSTEM_PROMPT, `${houseName}: ${top.category}`);
+      const aiText = sanitizeCaption(rawAiText);
+      houseCaptions[houseId] =
+        aiText ||
+        `${houseName} showed strong ${top.category?.toLowerCase() || "teamwork"} this ${period}.`;
     }
 
     const yearCaptions = {};
@@ -182,25 +203,11 @@ export async function onRequest({ env, request }) {
 
       const yearLabel = `Year ${yearId}`;
 
-      if (!env.AI) {
-        yearCaptions[yearId] = `${yearLabel} celebrated ${top.category?.toLowerCase() || "teamwork"} this ${period}.`;
-        continue;
-      }
-
-      try {
-        const prompt = `${yearLabel}: ${top.category}`;
-        const res = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-          messages: [
-            { role: "system", content: YEAR_SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 20,
-        });
-        yearCaptions[yearId] = res.response?.trim() || null;
-      } catch (err) {
-        console.error("values-captions AI error (year)", err);
-        yearCaptions[yearId] = `${yearLabel} highlighted ${top.category?.toLowerCase() || "values"} this ${period}.`;
-      }
+      const rawAiText = await safeRunAI(YEAR_SYSTEM_PROMPT, `${yearLabel}: ${top.category}`);
+      const aiText = sanitizeCaption(rawAiText);
+      yearCaptions[yearId] =
+        aiText ||
+        `${yearLabel} highlighted ${top.category?.toLowerCase() || "values"} this ${period}.`;
     }
 
     return json({ houses: houseCaptions, years: yearCaptions });

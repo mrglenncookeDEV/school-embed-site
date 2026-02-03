@@ -1,6 +1,8 @@
 import confetti from "canvas-confetti";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { createRoot } from "react-dom/client";
+import houseBadge from "../assets/house_gold.png";
 import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/houses";
 import { WaffleChart } from "../components/charts/WaffleChart";
 import { exportSnapshot } from "../utils/exportSnapshot";
@@ -13,6 +15,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Cell,
 } from "recharts";
 import {
   Timer,
@@ -96,6 +99,15 @@ const ICON_MAP = {
 };
 
 const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
+
+// Canonical values list (single source of truth for ordering, legend, and normalisation)
+const CANONICAL_VALUES = [
+  "General Award",
+  "Be Kind",
+  "Be Responsible",
+  "Be Safe",
+  "Be Ready",
+];
 
 const PLAYFUL_FONT = {
   fontFamily:
@@ -345,12 +357,15 @@ function ProgressTrack({
     return Math.max(0, ...effectiveRows.map((r) => Number(r.points ?? 0)));
   }, [disabled, effectiveRows]);
 
-  const POSITION_COLORS = {
-    1: "#facc15",
-    2: "#c0c0c0",
-    3: "#b87333",
-    4: "#0f172a",
-  };
+  const POSITION_COLORS = useMemo(
+    () => ({
+      1: "#facc15",
+      2: "#c0c0c0",
+      3: "#b87333",
+      4: "#0f172a",
+    }),
+    []
+  );
 
   const getHouseMarkerKey = (house) =>
     house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
@@ -393,7 +408,7 @@ function ProgressTrack({
     });
 
     return result;
-  }, [disabled, effectiveRows]);
+  }, [disabled, effectiveRows, POSITION_COLORS]);
 
   const markers = useMemo(() => {
     if (disabled) return [];
@@ -750,6 +765,42 @@ function ProgressTrack({
   );
 }
 
+const BrickPatternDefs = ({ patterns }) => {
+  if (!patterns?.length) return null;
+
+  return (
+    <defs>
+      {patterns.map(({ id, color }) => (
+        <pattern
+          key={id}
+          id={id}
+          patternUnits="userSpaceOnUse"
+          width="36"
+          height="18"
+        >
+          <rect x="0" y="0" width="16" height="7" fill={color} />
+          <rect x="18" y="0" width="16" height="7" fill={color} />
+
+          <rect x="-8" y="9" width="16" height="7" fill={color} />
+          <rect x="10" y="9" width="16" height="7" fill={color} />
+          <rect x="28" y="9" width="16" height="7" fill={color} />
+
+          <path
+            d="
+              M0 8 H36
+              M17 0 V7
+              M9 9 V16
+              M27 9 V16
+            "
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="0.6"
+          />
+        </pattern>
+      ))}
+    </defs>
+  );
+};
+
 function HouseAxisTick({ x, y, payload, axisMetaMap = {} }) {
   const houseKey = payload?.value;
   const house = axisMetaMap[houseKey];
@@ -810,10 +861,8 @@ function TopRoundedBar(props) {
 
   if (width <= 0 || height <= 0) return null;
 
-  const patternId = payload
-    ? `brick-${payload.houseKey || payload.house_id || payload.houseId || payload.id}`
-    : null;
-  const resolvedFill = patternId ? `url(#${patternId})` : (payload?.color ?? fill);
+  const brickColor = payload?.color ?? fill;
+  const resolvedFill = payload?.fill ?? fill;
 
   const radius = Math.min(18, height);
   const bottomY = y + height;
@@ -835,11 +884,14 @@ function TopRoundedBar(props) {
   `;
 
   const centerX = x + width / 2;
-  const smileyY = y + radius + 8;
+  const badgeY = y + radius + 38;
   const smileySize = 16;
 
+  const badgeSize = 70;
+  const badgeOffset = badgeSize / 2;
+
   return (
-    <g>
+    <g style={{ color: brickColor }}>
       <path
         d={path}
         fill={resolvedFill}
@@ -850,20 +902,15 @@ function TopRoundedBar(props) {
       />
 
       {showSmiley && (
-        <>
-          <g transform={`translate(${centerX}, ${smileyY})`}>
-            <circle r={smileySize} fill="#facc15" stroke="#0f172a" strokeWidth="2" />
-            <ellipse cx={-6} cy={-4} rx={3} ry={4} fill="#0f172a" />
-            <ellipse cx={6} cy={-4} rx={3} ry={4} fill="#0f172a" />
-            <path
-              d={`M ${-smileySize + 4} 4 Q 0 ${smileySize - 2} ${smileySize - 4} 4`}
-              stroke="#0f172a"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-            />
-          </g>
-        </>
+        <g transform={`translate(${centerX - badgeOffset}, ${badgeY - badgeOffset})`}>
+          <image
+            href={houseBadge}
+            width={badgeSize}
+            height={badgeSize}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ backgroundColor: "transparent" }}
+          />
+        </g>
       )}
     </g>
   );
@@ -935,7 +982,11 @@ const getLeadingHouseRow = (rows = []) => {
   }, null);
 };
 
-export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, minimal = false }) {
+export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
+  const location = useLocation();
+  const ALLOWED_PATHS = ["/scoreboard", "/teacher", "/embed/scoreboard"];
+  const isAllowedPath = ALLOWED_PATHS.some((p) => location.pathname.startsWith(p));
+
   const [scoreboard, setScoreboard] = useState({
     totalsThisWeek: [],
     totalsAllTime: [],
@@ -945,12 +996,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   });
   const [activeSlide, setActiveSlide] = useState(0);
   const [submissions, setSubmissions] = useState([]);
-  const [missingClasses, setMissingClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [missingLoading, setMissingLoading] = useState(true);
   const [submissionsLoading, setSubmissionsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [missingError, setMissingError] = useState("");
   const [submissionsError, setSubmissionsError] = useState("");
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
@@ -977,12 +1025,28 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const [valueCaptions, setValueCaptions] = useState({ houses: {}, years: {} });
   const [deepDive, setDeepDive] = useState(false);
   const [exporting, setExporting] = useState({ png: false, slides: false });
+  const [exportBusy, setExportBusy] = useState({
+    weekChart: false,
+    termChart: false,
+    weekTrack: false,
+    termTrack: false,
+    values: false,
+  });
   const currentPeriod = activeSlide === 0 ? "week" : "term";
   const highlightsText = aiHighlights[currentPeriod];
-  const housesData = valuesData.houses || valuesData.data || [];
-  const yearsData = valuesData.years || [];
-  const prevHousesData = previousValuesData.houses || [];
-  const prevYearsData = previousValuesData.years || [];
+  const housesData = useMemo(
+    () => valuesData.houses || valuesData.data || [],
+    [valuesData]
+  );
+  const yearsData = useMemo(() => valuesData.years || [], [valuesData]);
+  const prevHousesData = useMemo(
+    () => previousValuesData.houses || [],
+    [previousValuesData]
+  );
+  const prevYearsData = useMemo(
+    () => previousValuesData.years || [],
+    [previousValuesData]
+  );
   const isStaff = useMemo(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
@@ -1004,28 +1068,18 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   }, []);
 
   const CATEGORY_PALETTE = useMemo(
-    () => ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa", "#f97316", "#22d3ee", "#f43f5e"],
+    () => ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa"],
     []
   );
   const categoryColorMap = useMemo(() => {
     const map = {};
-    const categories = new Set();
-    housesData.forEach((row) => categories.add(row.award_category || "Uncategorised"));
-    yearsData.forEach((row) => categories.add(row.award_category || "Uncategorised"));
-    Array.from(categories)
-      .sort((a, b) => a.localeCompare(b))
-      .forEach((cat, idx) => {
-        map[cat] = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length];
-      });
+    CANONICAL_VALUES.forEach((cat, idx) => {
+      map[cat] = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length];
+    });
     return map;
-  }, [housesData, yearsData, CATEGORY_PALETTE]);
+  }, [CATEGORY_PALETTE]);
 
-  const awardCategories = useMemo(() => {
-    const set = new Set();
-    housesData.forEach((v) => set.add(v.award_category));
-    yearsData.forEach((v) => set.add(v.award_category));
-    return Array.from(set);
-  }, [housesData, yearsData]);
+  const awardCategories = CANONICAL_VALUES;
   const captionsByHouse = useMemo(() => {
     const map = {};
     Object.entries(valueCaptions?.houses || {}).forEach(([key, val]) => {
@@ -1040,14 +1094,39 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     if (!total) return 0;
     return Math.max(...rows.map((r) => r.points / total));
   }, []);
+  const runPngExport = useCallback(
+    async (key, ref, filename) => {
+      setExportBusy((p) => ({ ...p, [key]: true }));
+      try {
+        await exportSnapshot(ref, filename, { hideSelectors: ".no-export" });
+      } catch (err) {
+        console.error(`Export PNG failed (${key})`, err);
+        alert("Export PNG failed. Please try again.");
+      } finally {
+        setExportBusy((p) => ({ ...p, [key]: false }));
+      }
+    },
+    []
+  );
+  const normaliseValues = useCallback((rows = []) => {
+    const map = Object.fromEntries(CANONICAL_VALUES.map((v) => [v, 0]));
+    rows.forEach((r) => {
+      const cat = r.category ?? r.award_category;
+      if (map[cat] !== undefined) {
+        map[cat] += Number(r.points || 0);
+      }
+    });
+    return CANONICAL_VALUES.map((v) => ({ category: v, points: map[v] }));
+  }, []);
 
   const renderHouseTooltip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
     const dataPoint = payload[0]?.payload;
     const rawHouse = dataPoint?.houseKey ?? dataPoint?.house_id;
     const houseId = resolveHouseKey(rawHouse) || String(rawHouse ?? "");
-    const breakdown = houseBreakdown[houseId] || {};
-    const items = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const data = normaliseValues(valuesByHouse[houseId] || []);
+    const total = data.reduce((sum, d) => sum + d.points, 0);
+    const items = [...data].sort((a, b) => (b.points || 0) - (a.points || 0));
     const houseName = (getHouseById(houseId)?.name || dataPoint?.house_name || dataPoint?.name || label || "").toString();
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md min-w-[180px]">
@@ -1055,18 +1134,18 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           {houseName.toUpperCase()}
         </div>
         <div className="text-sm font-bold text-slate-900" style={PLAYFUL_FONT}>
-          {dataPoint?.points ?? 0} pts
+          {total} pts
         </div>
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {items.length === 0 && <li className="text-slate-400">No category data</li>}
-          {items.map(([cat, pts]) => (
-            <li key={cat} className="flex items-center gap-2">
+          {items.map((entry) => (
+            <li key={entry.category} className="flex items-center gap-2">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: categoryColorMap[cat] || "#cbd5e1" }}
+                style={{ backgroundColor: categoryColorMap[entry.category] || "#cbd5e1" }}
               />
-              <span className="font-medium capitalize">{cat}</span>
-              <span className="text-slate-500">· {pts} pts</span>
+              <span className="font-medium capitalize">{entry.category}</span>
+              <span className="text-slate-500">· {entry.points} pts</span>
             </li>
           ))}
         </ul>
@@ -1210,7 +1289,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         if (res.ok) {
           setClassesList(payload.classes || []);
         }
-      } catch (_) {
+      } catch {
         // ignore
       } finally {
         setClassesLoading(false);
@@ -1229,42 +1308,6 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     };
   }, [loadScoreboard]);
 
-
-  useEffect(() => {
-    if (!showMissing) {
-      setMissingClasses([]);
-      setMissingLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadMissing = async () => {
-      try {
-        const response = await fetch("/api/missing/current");
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to load missing submissions");
-        }
-        if (isMounted) {
-          setMissingClasses(payload.classes);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setMissingError(err.message);
-        }
-      } finally {
-        if (isMounted) {
-          setMissingLoading(false);
-        }
-      }
-    };
-
-    loadMissing();
-    return () => {
-      isMounted = false;
-    };
-  }, [showMissing]);
 
   // Load submissions based on active carousel slide
   useEffect(() => {
@@ -1507,44 +1550,29 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const houseDominance = useMemo(() => {
     const map = {};
     HOUSE_ORDER.forEach((houseId) => {
-      const data = valuesByHouse[houseId] || [];
-      const total = data.reduce((sum, d) => sum + d.points, 0);
-      if (total === 0) {
-        map[houseId] = 0;
-        return;
-      }
-      const maxShare = Math.max(...data.map((d) => d.points / total));
-      map[houseId] = maxShare;
+      const data = normaliseValues(valuesByHouse[houseId] || []);
+      map[houseId] = getDominantPct(data);
     });
     return map;
-  }, [valuesByHouse]);
+  }, [valuesByHouse, normaliseValues, getDominantPct]);
   const houseDelta = useMemo(() => {
     const map = {};
     HOUSE_ORDER.forEach((houseId) => {
-      const curPct = getDominantPct(valuesByHouse[houseId] || []);
-      const prevPct = getDominantPct(prevValuesByHouse[houseId] || []);
+      const curPct = getDominantPct(normaliseValues(valuesByHouse[houseId] || []));
+      const prevPct = getDominantPct(normaliseValues(prevValuesByHouse[houseId] || []));
       map[houseId] = curPct - prevPct;
     });
     return map;
-  }, [valuesByHouse, prevValuesByHouse, getDominantPct]);
+  }, [valuesByHouse, prevValuesByHouse, getDominantPct, normaliseValues]);
   const sortedHouses = useMemo(() => {
     return [...HOUSE_ORDER].sort((a, b) => {
-      const diff = (houseDominance[b] || 0) - (houseDominance[a] || 0);
+      const diff =
+        getDominantPct(normaliseValues(valuesByHouse[b] || [])) -
+        getDominantPct(normaliseValues(valuesByHouse[a] || []));
+
       return diff !== 0 ? diff : HOUSE_ORDER.indexOf(a) - HOUSE_ORDER.indexOf(b);
     });
-  }, [houseDominance]);
-  const houseBreakdown = useMemo(() => {
-    const map = {};
-    housesData.forEach((row) => {
-      const rawId = row.house_id;
-      const houseId = resolveHouseKey(rawId) || String(rawId ?? "");
-      if (!houseId) return;
-      if (!map[houseId]) map[houseId] = {};
-      const cat = row.award_category || "Uncategorised";
-      map[houseId][cat] = (map[houseId][cat] || 0) + Number(row.total_points || 0);
-    });
-    return map;
-  }, [housesData]);
+  }, [valuesByHouse, getDominantPct, normaliseValues]);
   const classHouseBreakdown = useMemo(() => {
     const map = {};
     classValuesData.forEach((row) => {
@@ -1569,12 +1597,12 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     return map;
   }, [classesList, classHouseBreakdown]);
   const totalValues = useMemo(() => {
-    const map = {};
-    housesData.forEach(({ award_category, total_points }) => {
-      map[award_category] = (map[award_category] || 0) + Number(total_points || 0);
-    });
-    return Object.entries(map).map(([category, points]) => ({ category, points }));
-  }, [housesData]);
+    const rows = housesData.map(({ award_category, total_points }) => ({
+      category: award_category,
+      points: Number(total_points || 0),
+    }));
+    return normaliseValues(rows);
+  }, [housesData, normaliseValues]);
   const yearGroupOrder = useMemo(() => {
     const set = new Set();
     yearsData.forEach((row) => {
@@ -1618,12 +1646,12 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const yearDelta = useMemo(() => {
     const map = {};
     yearGroupOrder.forEach((year) => {
-      const curPct = getDominantPct(valuesByYear[year] || []);
-      const prevPct = getDominantPct(prevValuesByYear[year] || []);
+      const curPct = getDominantPct(normaliseValues(valuesByYear[year] || []));
+      const prevPct = getDominantPct(normaliseValues(prevValuesByYear[year] || []));
       map[year] = curPct - prevPct;
     });
     return map;
-  }, [yearGroupOrder, valuesByYear, prevValuesByYear, getDominantPct]);
+  }, [yearGroupOrder, valuesByYear, prevValuesByYear, getDominantPct, normaliseValues]);
   const valuesByClass = useMemo(() => {
     const base = {};
     classesList.forEach((cls) => {
@@ -1656,7 +1684,11 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   }, [classValuesData, classesList]);
   const strongestValue = useMemo(() => {
     if (!totalValues.length) return null;
-    return totalValues.reduce((a, b) => (b.points > a.points ? b : a));
+    const isGeneralAward = (category) =>
+      typeof category === "string" && category.trim().toLowerCase() === "general award";
+    const candidates = totalValues.filter((value) => !isGeneralAward(value.category));
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) => (b.points > a.points ? b : a));
   }, [totalValues]);
 
   const TrendArrow = ({ delta }) => {
@@ -1698,6 +1730,29 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       return aNum - bNum;
     });
   }, [classTotals]);
+
+  const weekBrickPatterns = useMemo(
+    () =>
+      weekRows.map((row, idx) => ({
+        id: `week-house-brick-${idx}`,
+        color: row.color ?? "#2563eb",
+      })),
+    [weekRows]
+  );
+
+  const termBrickPatterns = useMemo(
+    () =>
+      termRows.map((row, idx) => ({
+        id: `term-house-brick-${idx}`,
+        color:
+          row.color ??
+          getHouseById(row.houseKey)?.color ??
+          "#2563eb",
+      })),
+    [termRows]
+  );
+
+  // year/class breakdowns use solid fills (no patterns)
 
   const weekAxisMap = useMemo(
     () =>
@@ -1828,6 +1883,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     valuesByHouse,
     categoryColorMap,
     lastUpdatedLabel,
+    valueCaptions,
+    valueCaptions.houses,
   ]);
 
   const weekTimeProgress = clamp(getWeekProgress());
@@ -2112,25 +2169,6 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const termShowTrophy = Boolean(
     termLeaderMessage && termLeaderMessage !== "No leaders so far"
   );
-  const zeroPointHouses = useMemo(
-    () => weekRows.filter((row) => Number(row.points ?? 0) === 0),
-    [weekRows]
-  );
-  const zeroPointMissing = zeroPointHouses.map((row) => ({
-    id: row.houseId ?? row.houseKey,
-    name: row.name,
-    reason: "0 pts recorded",
-  }));
-  const missingClassesWithReason = missingClasses.map((klass) => ({
-    ...klass,
-    reason: "No submission yet",
-  }));
-  const mergedMissingClasses = [
-    ...missingClassesWithReason,
-    ...zeroPointMissing.filter(
-      (zp) => !missingClassesWithReason.some((m) => m.id === zp.id)
-    ),
-  ];
   const leadingHouseFooter = leaderMessage ? (
     <div className="flex items-center justify-end gap-3">
       {showTrophy && (
@@ -2173,15 +2211,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     </div>
   ) : null;
 
-  const missingCount = mergedMissingClasses.length;
-  const missingHeadline = missingLoading
-    ? "Checking for outstanding submissions…"
-    : missingError
-      ? missingError
-      : missingCount === 0
-        ? "All classes submitted this week"
-        : `${missingCount} class${missingCount === 1 ? "" : "es"} ${missingCount === 1 ? "has not" : "have not"
-        } submitted this week`;
+  if (!isAllowedPath) return null;
 
   return (
     <section className={`${containerClasses} w-full`}>
@@ -2196,23 +2226,23 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           {activeSlide === 1 && (
             <button
               onClick={() => setActiveSlide(0)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:bg-slate-50 shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-blue-600 bg-blue-600 text-white shadow-sm transition hover:bg-blue-500"
             >
-              <ChevronLeft className="h-5 w-5" />
-              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-                This Week
+              <ChevronLeft className="h-5 w-5 text-white" />
+              <span className="text-xs font-semibold uppercase tracking-[0.3em]">
+                THIS WEEK
               </span>
             </button>
           )}
           {activeSlide === 0 && (
             <button
               onClick={() => setActiveSlide(1)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border transition-all bg-white text-slate-500 border-slate-200 hover:bg-slate-50 shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-red-600 bg-red-600 text-white shadow-sm transition hover:bg-red-500"
             >
-              <span className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-                This Term
+              <span className="text-xs font-semibold uppercase tracking-[0.3em]">
+                THIS TERM
               </span>
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-5 w-5 text-white" />
             </button>
           )}
         </div>
@@ -2258,9 +2288,30 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
               {/* Chart Card */}
               <div
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
                 style={weekCardBorderStyle}
               >
+                <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
+                  <button
+                    disabled={exportBusy.weekChart}
+                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
+                      exportBusy.weekChart ? "opacity-70 cursor-wait" : ""
+                    }`}
+                    onClick={() =>
+                      runPngExport(
+                        "weekChart",
+                        weekChartRef,
+                        `week-houses-${new Date().toISOString().slice(0, 10)}.png`
+                      )
+                    }
+                  >
+                    <Camera className="h-4 w-4" />
+                    {exportBusy.weekChart ? "Processing…" : "Export PNG"}
+                    {exportBusy.weekChart && (
+                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
+                    )}
+                  </button>
+                </div>
                 <div className="mb-4 space-y-1">
                   <h2
                     className="highlight-title text-lg uppercase tracking-[0.4em]"
@@ -2274,7 +2325,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 </div>
                 <div
                   ref={chartRef}
-                  className="relative w-full"
+                  className="w-full"
                   style={{ height: "400px" }}
                 >
                   {loading ? (
@@ -2282,60 +2333,27 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   ) : error ? (
                     <p className="text-sm text-rose-600">{error}</p>
                   ) : (
-                    <div className="relative h-full">
-                      <div className="absolute right-0 top-0 flex gap-2 no-export z-10">
-                        <button
-                          className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
-                          onClick={() =>
-                            exportSnapshot(
-                              weekChartRef,
-                              `week-houses-${new Date().toISOString().slice(0, 10)}.png`,
-                              { hideSelectors: ".no-export" }
-                            )
-                          }
-                        >
-                          Export PNG
-                        </button>
-                      </div>
+                    <div className="h-full">
                       <ResponsiveContainer ref={weekChartRef} width="100%" height="100%">
-                        <BarChart
-                          data={weekRows}
-                          margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
-                          barCategoryGap="0%"
-                          barGap={0}
-                        >
-                          <defs>
-                            {weekRows.map((row) => {
-                              const color =
-                                weekAxisMap[row.houseKey]?.color ||
-                                getHouseById(row.houseKey)?.color ||
-                                "#94a3b8";
-                              return (
-                                <pattern
-                                  key={`brick-${row.houseKey}`}
-                                  id={`brick-${row.houseKey}`}
-                                  width="8"
-                                  height="6"
-                                  patternUnits="userSpaceOnUse"
-                                >
-                                  <rect width="8" height="6" fill={color} />
-                                  <rect x="0" y="0" width="8" height="3" fill="rgba(0,0,0,0.14)" />
-                                  <rect x="0" y="3" width="4" height="3" fill="rgba(0,0,0,0.14)" />
-                                </pattern>
-                              );
-                            })}
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                          <XAxis
-                            dataKey="houseKey"
+                      <BarChart
+                        data={weekRows}
+                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                        barCategoryGap="0%"
+                        barGap={0}
+                      >
+                        <BrickPatternDefs patterns={weekBrickPatterns} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="houseKey"
                             tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
                             tickLine={false}
                             axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                           />
                           <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                          <Tooltip content={renderYearTooltip} />
+                          <Tooltip content={renderHouseTooltip} />
                           <Bar
                             dataKey="points"
+                            fill="transparent"
                             shape={(props) => (
                               <TopRoundedBar
                                 {...props}
@@ -2343,7 +2361,21 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                                 highlightHouseKeys={tiedHouseKeys}
                               />
                             )}
-                          />
+                          >
+                            {weekRows.map((row, idx) => {
+                              const pattern = weekBrickPatterns[idx];
+                              return (
+                                <Cell
+                                  key={pattern?.id ?? idx}
+                                  fill={
+                                    pattern && Number(row.points ?? 0) > 0
+                                      ? `url(#${pattern.id})`
+                                      : "transparent"
+                                  }
+                                />
+                              );
+                            })}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -2374,71 +2406,65 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
                 {showWeekYearBars && (
                   <div className="mt-3 h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={yearGroupTotals}
-                        margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="yearLabel"
-                          height={40}
-                          interval={0}
-                          tick={{ fontSize: 11 }}
-                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
-                          tickLine={false}
-                        />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                        <Tooltip content={renderYearTooltip} />
-                        <defs>
-                          <linearGradient id="yearFillWeek" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#0b1f3a" stopOpacity="1" />
-                            <stop offset="100%" stopColor="#0b1f3a" stopOpacity="0.7" />
-                          </linearGradient>
-                        </defs>
-                        <Bar
-                          dataKey="points"
-                          fill="url(#yearFillWeek)"
-                          radius={[8, 8, 0, 0]}
-                          stroke="#0f172a"
-                          strokeWidth={2}
-                          label={renderBarValueLabel}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={yearGroupTotals}
+                      margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="yearLabel"
+                        height={40}
+                        interval={0}
+                        tick={{ fontSize: 11 }}
+                        axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                        tickLine={false}
+                      />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                      <Tooltip content={renderYearTooltip} />
+                      <Bar
+                        dataKey="points"
+                        fill="#0b1f3a"
+                        radius={[8, 8, 0, 0]}
+                        stroke="#0f172a"
+                        strokeWidth={2}
+                        label={renderBarValueLabel}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                   </div>
                 )}
 
                 {showWeekClassBars && (
                   <div className="mt-3 h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={classTotals}
-                        margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
-                        barCategoryGap="0%"
-                        barGap={0}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="className"
-                          angle={-35}
-                          textAnchor="end"
+                    <BarChart
+                      data={classTotals}
+                      margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
+                      barCategoryGap="0%"
+                      barGap={0}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="className"
+                        angle={-35}
+                        textAnchor="end"
                           height={70}
                           interval={0}
-                          tick={{ fontSize: 10 }}
-                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
-                          tickLine={false}
-                        />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                        <Tooltip content={renderClassTooltip} />
-                        <Bar
-                          dataKey="points"
-                          fill="#0ea5e9"
-                          radius={[6, 6, 0, 0]}
-                          stroke="#0f172a"
-                          strokeWidth={2}
-                          label={renderBarValueLabel}
-                        />
+                        tick={{ fontSize: 10 }}
+                        axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                        tickLine={false}
+                      />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                      <Tooltip content={renderClassTooltip} />
+                      <Bar
+                        dataKey="points"
+                        fill="#0ea5e9"
+                        radius={[6, 6, 0, 0]}
+                        stroke="#0f172a"
+                        strokeWidth={2}
+                        label={renderBarValueLabel}
+                      />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2446,26 +2472,28 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </div>
 
               {/* Race Track for Week */}
-              <div className="relative">
-                <div
-                  ref={weekTrackRef}
-                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                  style={{ position: "relative" }}
-                >
-                  <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
-                    <button
-                      className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
-                      onClick={() =>
-                        exportSnapshot(
-                          weekTrackRef,
-                          `week-track-${new Date().toISOString().slice(0, 10)}.png`,
-                          { hideSelectors: ".no-export" }
-                        )
-                      }
-                    >
-                      Export PNG
-                    </button>
-                  </div>
+
+                <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
+                  <button
+                    disabled={exportBusy.weekTrack}
+                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
+                      exportBusy.weekTrack ? "opacity-70 cursor-wait" : ""
+                    }`}
+                    onClick={() =>
+                      runPngExport(
+                        "weekTrack",
+                        weekTrackRef,
+                        `week-track-${new Date().toISOString().slice(0, 10)}.png`
+                      )
+                    }
+                  >
+                    <Camera className="h-4 w-4" />
+                    {exportBusy.weekTrack ? "Processing…" : "Export PNG"}
+                    {exportBusy.weekTrack && (
+                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
+                    )}
+                  </button>
+                </div>
                   <ProgressTrack
                     title="RACE FOR THE WEEK!"
                     subtitle={weekRangeLabel}
@@ -2484,9 +2512,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     onFinish={fireConfettiBurst}
                   />
                 </div>
-              </div>
             </div>
-          </div>
+
 
           {/* SLIDE 2: This Term */}
           <div className="w-full flex-shrink-0 px-1">
@@ -2521,9 +2548,30 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
               {/* Chart Card */}
               <div
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
                 style={termCardBorderStyle}
               >
+                <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+                  <button
+                    disabled={exportBusy.termChart}
+                    className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
+                      exportBusy.termChart ? "opacity-70 cursor-wait" : ""
+                    }`}
+                    onClick={() =>
+                      runPngExport(
+                        "termChart",
+                        termChartRef,
+                        `term-houses-${new Date().toISOString().slice(0, 10)}.png`
+                      )
+                    }
+                  >
+                    <Camera className="h-4 w-4" />
+                    {exportBusy.termChart ? "Processing…" : "Export PNG"}
+                    {exportBusy.termChart && (
+                      <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
+                    )}
+                  </button>
+                </div>
                 <div className="mb-4 space-y-1">
                   <h2
                     className="highlight-title text-lg uppercase tracking-[0.4em]"
@@ -2544,21 +2592,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                     No active term
                   </div>
                 ) : (
-                  <div className="relative w-full" style={{ height: "400px" }}>
-                    <div className="absolute right-0 top-0 flex gap-2 no-export z-10">
-                      <button
-                        className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
-                        onClick={() =>
-                          exportSnapshot(
-                            termChartRef,
-                            `term-houses-${new Date().toISOString().slice(0, 10)}.png`,
-                            { hideSelectors: ".no-export" }
-                          )
-                        }
-                      >
-                        Export PNG
-                      </button>
-                    </div>
+                  <div className="w-full" style={{ height: "400px" }}>
                     <ResponsiveContainer ref={termChartRef} width="100%" height="100%">
                       <BarChart
                         data={termRows}
@@ -2566,27 +2600,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                         barCategoryGap="0%"
                         barGap={0}
                       >
-                        <defs>
-                          {termRows.map((row) => {
-                            const color =
-                              termAxisMap[row.houseKey]?.color ||
-                              getHouseById(row.houseKey)?.color ||
-                              "#94a3b8";
-                            return (
-                              <pattern
-                                key={`brick-${row.houseKey}`}
-                                id={`brick-${row.houseKey}`}
-                                width="8"
-                                height="6"
-                                patternUnits="userSpaceOnUse"
-                              >
-                                <rect width="8" height="6" fill={color} />
-                                <rect x="0" y="0" width="8" height="3" fill="rgba(0,0,0,0.14)" />
-                                <rect x="0" y="3" width="4" height="3" fill="rgba(0,0,0,0.14)" />
-                              </pattern>
-                            );
-                          })}
-                        </defs>
+                        <BrickPatternDefs patterns={termBrickPatterns} />
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="houseKey"
@@ -2595,9 +2609,10 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                           axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                         />
                         <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                        <Tooltip formatter={(value) => `${value} pts`} />
+                        <Tooltip content={renderHouseTooltip} />
                         <Bar
                           dataKey="points"
+                          fill="transparent"
                           shape={(props) => (
                             <TopRoundedBar
                               {...props}
@@ -2605,7 +2620,21 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                               highlightHouseKeys={termTiedHouseKeys}
                             />
                           )}
-                        />
+                        >
+                          {termRows.map((row, idx) => {
+                            const pattern = termBrickPatterns[idx];
+                            return (
+                              <Cell
+                                key={pattern?.id ?? idx}
+                                fill={
+                                  pattern && Number(row.points ?? 0) > 0
+                                    ? `url(#${pattern.id})`
+                                    : "transparent"
+                                }
+                              />
+                            );
+                          })}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2630,31 +2659,25 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                       data={yearGroupTotals}
                       margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="yearLabel"
-                        height={40}
-                        interval={0}
-                        tick={{ fontSize: 11 }}
-                        axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
-                        tickLine={false}
-                      />
-                      <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                      <Tooltip content={renderYearTooltip} />
-                      <defs>
-                        <linearGradient id="yearFillTerm" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#0b1f3a" stopOpacity="1" />
-                          <stop offset="100%" stopColor="#0b1f3a" stopOpacity="0.7" />
-                        </linearGradient>
-                      </defs>
-                      <Bar
-                        dataKey="points"
-                        fill="url(#yearFillTerm)"
-                        radius={[8, 8, 0, 0]}
-                        stroke="#0f172a"
-                        strokeWidth={2}
-                        label={renderBarValueLabel}
-                      />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="yearLabel"
+                          height={40}
+                          interval={0}
+                          tick={{ fontSize: 11 }}
+                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                          tickLine={false}
+                        />
+                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <Tooltip content={renderYearTooltip} />
+                        <Bar
+                          dataKey="points"
+                          fill="#0b1f3a"
+                          radius={[8, 8, 0, 0]}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          label={renderBarValueLabel}
+                        />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -2694,14 +2717,14 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                         />
                         <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
                         <Tooltip content={renderClassTooltip} />
-                        <Bar
-                          dataKey="points"
-                          fill="#dc2626"
-                          radius={[6, 6, 0, 0]}
-                          stroke="#0f172a"
-                          strokeWidth={2}
-                          label={renderBarValueLabel}
-                        />
+                      <Bar
+                        dataKey="points"
+                        fill="#dc2626"
+                        radius={[6, 6, 0, 0]}
+                        stroke="#0f172a"
+                        strokeWidth={2}
+                        label={renderBarValueLabel}
+                      />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2709,24 +2732,26 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </div>
 
               {/* Race Track for Term */}
-              <div className="relative">
-                <div
-                  ref={termTrackRef}
-                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                  style={{ position: "relative" }}
-                >
-                  <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+
+                  <div className="absolute right-10 top-10 flex gap-2 no-export z-10">
                     <button
-                      className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
+                      disabled={exportBusy.termTrack}
+                      className={`inline-flex items-center gap-2 rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700 ${
+                        exportBusy.termTrack ? "opacity-70 cursor-wait" : ""
+                      }`}
                       onClick={() =>
-                        exportSnapshot(
+                        runPngExport(
+                          "termTrack",
                           termTrackRef,
-                          `term-track-${new Date().toISOString().slice(0, 10)}.png`,
-                          { hideSelectors: ".no-export" }
+                          `term-track-${new Date().toISOString().slice(0, 10)}.png`
                         )
                       }
                     >
-                      Export PNG
+                      <Camera className="h-4 w-4" />
+                      {exportBusy.termTrack ? "Processing…" : "Export PNG"}
+                      {exportBusy.termTrack && (
+                        <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />
+                      )}
                     </button>
                   </div>
                   <ProgressTrack
@@ -2752,10 +2777,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </div>
             </div>
           </div>
-        </div>
-      </div >
 
-      {(highlightsText !== undefined) && (
+      {highlightsText !== undefined && (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-4 w-4 text-yellow-500" />
@@ -2775,7 +2798,97 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       )}
 
       {!valuesLoading && (
-        <div ref={valuesRef} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div ref={valuesRef} className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+          <button
+            type="button"
+            disabled={exportBusy.values}
+            onClick={() =>
+              runPngExport(
+                "values",
+                valuesRef,
+                `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`
+              )
+            }
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
+              exportBusy.values ? "bg-slate-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
+            } no-export`}
+          >
+            <Camera className="h-4 w-4" />
+            {exportBusy.values ? "Processing…" : "Export PNG"}
+            {exportBusy.values && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
+          </button>
+          <button
+            type="button"
+            disabled={exporting.slides}
+            onClick={async () => {
+              setExporting((p) => ({ ...p, slides: true }));
+              try {
+                const currentRows = currentPeriod === "week" ? weekRows : termRows;
+                const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+                const leaderRow = sorted[0];
+                const secondRow = sorted[1];
+                const leaderName = leaderRow
+                  ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+                  : "—";
+                const leaderColor = leaderRow
+                  ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+                  : "#2563eb";
+                const leaderMargin =
+                  leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
+                const prevLeaderName =
+                  currentPeriod === "week"
+                    ? (prevWeekLeaderRef.current
+                      ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+                      : null)
+                    : (prevTermLeaderRef.current
+                      ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+                      : null);
+                const chartData = currentRows.map((row) => ({
+                  name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+                  points: row.points || 0,
+                  color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+                }));
+
+                await exportAssemblyDeck({
+                  view: currentPeriod,
+                  periodLabel: currentPeriod === "week" ? "week" : "term",
+                  updatedLabel: lastUpdatedLabel,
+                  summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
+                  leader: {
+                    name: leaderName,
+                    color: leaderColor,
+                    margin: leaderMargin,
+                    prevLeader: prevLeaderName,
+                  },
+                  chartData,
+                  deltas: houseDelta,
+                  totalValues,
+                  houses: sortedHouses.map((id) => ({
+                    id,
+                    name: HOUSES[id].name,
+                    data: valuesByHouse[id] || [],
+                    caption: valueCaptions.houses?.[id],
+                    color: HOUSES[id].color,
+                  })),
+                  colours: categoryColorMap,
+                });
+              } catch (err) {
+                console.error("Export slides failed", err);
+                alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
+              } finally {
+                setExporting((p) => ({ ...p, slides: false }));
+              }
+            }}
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
+              exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
+            } no-export`}
+          >
+            <Presentation className="h-4 w-4" />
+            {exporting.slides ? "Building…" : "Export slides"}
+            {exporting.slides && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
+          </button>
+        </div>
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -2791,104 +2904,6 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 {currentPeriod === "week" ? "This week" : "This term"} by award category
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={exporting.png}
-                onClick={async () => {
-                  setExporting((p) => ({ ...p, png: true }));
-                  try {
-                    await exportSnapshot(
-                      valuesRef,
-                      `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`,
-                      { hideSelectors: ".no-export" }
-                    );
-                  } catch (err) {
-                    console.error("Export PNG failed", err);
-                    alert("Export PNG failed. Please try again.");
-                  } finally {
-                    setExporting((p) => ({ ...p, png: false }));
-                  }
-                }}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
-                  exporting.png ? "bg-slate-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
-                } no-export`}
-              >
-                <Camera className="h-4 w-4" />
-                {exporting.png ? "Creating…" : "Export PNG"}
-                {exporting.png && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
-              </button>
-              <button
-                type="button"
-                disabled={exporting.slides}
-                onClick={async () => {
-                  setExporting((p) => ({ ...p, slides: true }));
-                  try {
-                    const currentRows = currentPeriod === "week" ? weekRows : termRows;
-                    const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
-                    const leaderRow = sorted[0];
-                    const secondRow = sorted[1];
-                    const leaderName = leaderRow
-                      ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
-                      : "—";
-                    const leaderColor = leaderRow
-                      ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
-                      : "#2563eb";
-                    const leaderMargin =
-                      leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
-                    const prevLeaderName =
-                      currentPeriod === "week"
-                        ? (prevWeekLeaderRef.current
-                          ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
-                          : null)
-                        : (prevTermLeaderRef.current
-                          ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
-                          : null);
-                    const chartData = currentRows.map((row) => ({
-                      name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
-                      points: row.points || 0,
-                      color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
-                    }));
-
-                    await exportAssemblyDeck({
-                      view: currentPeriod,
-                      periodLabel: currentPeriod === "week" ? "week" : "term",
-                      updatedLabel: lastUpdatedLabel,
-                      summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
-                      leader: {
-                        name: leaderName,
-                        color: leaderColor,
-                        margin: leaderMargin,
-                        prevLeader: prevLeaderName,
-                      },
-                      chartData,
-                      deltas: houseDelta,
-                      totalValues,
-                      houses: sortedHouses.map((id) => ({
-                        id,
-                        name: HOUSES[id].name,
-                        data: valuesByHouse[id] || [],
-                        caption: valueCaptions.houses?.[id],
-                        color: HOUSES[id].color,
-                      })),
-                      colours: categoryColorMap,
-                    });
-                  } catch (err) {
-                    console.error("Export slides failed", err);
-                    alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
-                  } finally {
-                    setExporting((p) => ({ ...p, slides: false }));
-                  }
-                }}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
-                  exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
-                } no-export`}
-              >
-                <Presentation className="h-4 w-4" />
-                {exporting.slides ? "Building…" : "Export slides"}
-                {exporting.slides && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
-              </button>
-            </div>
             {isStaff && (
               <label className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                 <input
@@ -2902,15 +2917,16 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
           </div>
 
             <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center md:gap-10">
+            <div className="flex flex-col md:flex-row md:items-stretch md:gap-10">
               <div>
                 {strongestValue && (
                   <div
-                    className="inline-flex items-center gap-2 px-4 py-2 mb-3 rounded-full text-sm font-semibold shadow-[0_8px_18px_rgba(0,0,0,0.18)] ring-2 ring-white/70"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 mb-3 rounded-full text-sm font-semibold shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-2 ring-white/80"
                     style={{
-                      background: `radial-gradient(circle at 30% 20%, #ffffff 0%, #f8fafc 40%, ${categoryColorMap[strongestValue.category] || "#94a3b8"}33 100%)`,
-                      color: categoryColorMap[strongestValue.category] || "#0f172a",
-                      boxShadow: "0 10px 25px rgba(0,0,0,0.18), inset 0 2px 6px rgba(255,255,255,0.9)",
+                      background: `linear-gradient(135deg, ${categoryColorMap[strongestValue.category] || "#94a3b8"}44, ${categoryColorMap[strongestValue.category] || "#94a3b8"}22 40%, #f1f5f9)` ,
+                      color: "#0f172a",
+                      boxShadow: "0 12px 28px rgba(0,0,0,0.22), inset 0 1px 6px rgba(255,255,255,0.9)",
+                      border: `1px solid ${(categoryColorMap[strongestValue.category] || "#94a3b8")}66`,
                     }}
                   >
                     <span className="text-lg">✨</span>
@@ -2930,7 +2946,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 />
               </div>
 
-              <div className="mt-4 md:mt-0 space-y-2 text-sm">
+              <div className="mt-4 md:mt-0 flex-1 space-y-2 text-sm">
                 {awardCategories.map((cat) => (
                   <div key={cat} className="flex items-center gap-3">
                     <span
@@ -2951,7 +2967,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
               {sortedHouses.map((houseId) => {
                 const house = HOUSES[houseId];
-                const data = valuesByHouse[houseId] || [];
+                const data = normaliseValues(valuesByHouse[houseId] || []);
                 const total = data.reduce((s, d) => s + d.points, 0);
 
                 return (
@@ -3004,7 +3020,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 {yearGroupOrder.map((year) => {
-                  const data = valuesByYear[year] || [];
+                  const data = normaliseValues(valuesByYear[year] || []);
                   const total = data.reduce((s, d) => s + d.points, 0);
                   return (
                     <div key={year} className="space-y-2">
@@ -3057,21 +3073,24 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
 
             {showClassBreakdown && (
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {Object.values(valuesByClass).map((entry, idx) => (
-                  <div key={`${entry.className}-${idx}`} className="space-y-2">
-                    <h5 className="text-sm font-semibold">
-                      {entry.className}
-                    </h5>
-                    <p className="text-xs text-slate-500">
-                      {entry.teacher}
-                    </p>
-                    <WaffleChart
-                      data={entry.data}
-                      colours={categoryColorMap}
-                      size="md"
-                    />
-                  </div>
-                ))}
+                {Object.values(valuesByClass).map((entry, idx) => {
+                  const data = normaliseValues(entry.data || []);
+                  return (
+                    <div key={`${entry.className}-${idx}`} className="space-y-2">
+                      <h5 className="text-sm font-semibold">
+                        {entry.className}
+                      </h5>
+                      <p className="text-xs text-slate-500">
+                        {entry.teacher}
+                      </p>
+                      <WaffleChart
+                        data={data}
+                        colours={categoryColorMap}
+                        size="md"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -3126,6 +3145,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
                   const HouseIcon = houseMeta?.icon;
                   const houseLabel = houseMeta?.name ?? entry.house_name;
+                  const teacherLabel = entry.teacherDisplayName || entry.submitted_by_email || "—";
+                  const submittedByLabel = `${entry.class_name}${teacherLabel ? ` · ${teacherLabel}` : ""}`;
                   return (
                     <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 font-semibold text-slate-900">{entry.class_name}</td>
@@ -3145,7 +3166,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-900">{entry.points}</td>
                       <td className="px-6 py-4 text-slate-600">{entry.award_category || "General"}</td>
-                      <td className="px-6 py-4 text-slate-600">{entry.submitted_by_email}</td>
+                      <td className="px-6 py-4 text-slate-600">{submittedByLabel}</td>
                       <td className="px-6 py-4 text-slate-600">
                         {entry.entry_date ? new Date(entry.entry_date).toLocaleDateString("en-GB", {
                           day: "numeric",
@@ -3162,56 +3183,6 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         )}
       </div>
 
-      {
-        showMissing && (
-          <div className="rounded-3xl border border-red-100 bg-red-50 p-6 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: "500px" }}>
-            <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-red-50 z-10 pb-4">
-              <div>
-                <h2
-                  className="text-lg font-semibold uppercase tracking-[0.4em] text-red-500"
-                >
-                  Missing submissions
-                </h2>
-                <p className="text-lg font-semibold text-red-700">{missingHeadline}</p>
-              </div>
-              <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
-                Weekly flag
-              </span>
-            </div>
-
-            <div className="overflow-y-auto pr-2">
-              {missingLoading ? (
-                <p className="mt-4 text-sm text-slate-600">Checking for outstanding submissions…</p>
-              ) : missingError ? (
-                <p className="mt-4 text-sm text-rose-600">{missingError}</p>
-              ) : mergedMissingClasses.length === 0 ? (
-                <p className="mt-4 text-sm text-red-700">Great job—no classes are missing yet.</p>
-              ) : (
-                <ul className="mt-4 grid gap-3">
-                  {mergedMissingClasses.map((klass) => (
-                    <li
-                      key={klass.id}
-                      className="rounded-2xl border border-red-100 bg-white/80 px-4 py-3 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold text-red-700">{klass.name}</p>
-                        <span className="rounded-full border border-red-200 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-red-700">
-                          {klass.reason ?? "Missing"}
-                        </span>
-                      </div>
-                      {klass.teacherDisplayName || klass.teacher_email ? (
-                        <p className="mt-2 text-xs text-red-500">
-                          {klass.teacherDisplayName} {klass.teacher_email ? `· ${klass.teacher_email}` : ""}
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )
-      }
     </section >
   );
 }

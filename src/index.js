@@ -404,6 +404,9 @@ async function fetchEntries(db, weekId) {
         pe.updated_at,
         c.id AS class_id,
         c.name AS class_name,
+        c.Teacher_Title,
+        c.Teacher_FirstName,
+        c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
         h.color AS house_color
@@ -416,7 +419,16 @@ async function fetchEntries(db, weekId) {
     .bind(weekId)
     .all();
 
-  return results;
+  return results.map((row) => ({
+    ...row,
+    teacherDisplayName: [
+      row.Teacher_Title,
+      row.Teacher_FirstName,
+      row.Teacher_LastName,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
 }
 
 async function fetchAllEntries(db) {
@@ -432,6 +444,9 @@ async function fetchAllEntries(db) {
         pe.updated_at,
         c.id AS class_id,
         c.name AS class_name,
+        c.Teacher_Title,
+        c.Teacher_FirstName,
+        c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
         h.color AS house_color
@@ -442,7 +457,16 @@ async function fetchAllEntries(db) {
     )
     .all();
 
-  return results;
+  return results.map((row) => ({
+    ...row,
+    teacherDisplayName: [
+      row.Teacher_Title,
+      row.Teacher_FirstName,
+      row.Teacher_LastName,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
 }
 
 async function fetchEntriesByTerm(db, term) {
@@ -458,6 +482,9 @@ async function fetchEntriesByTerm(db, term) {
         pe.updated_at,
         c.id AS class_id,
         c.name AS class_name,
+        c.Teacher_Title,
+        c.Teacher_FirstName,
+        c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
         h.color AS house_color
@@ -471,7 +498,16 @@ async function fetchEntriesByTerm(db, term) {
     .bind(term.start_date, term.end_date)
     .all();
 
-  return results;
+  return results.map((row) => ({
+    ...row,
+    teacherDisplayName: [
+      row.Teacher_Title,
+      row.Teacher_FirstName,
+      row.Teacher_LastName,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
 }
 
 async function countRows(db, table) {
