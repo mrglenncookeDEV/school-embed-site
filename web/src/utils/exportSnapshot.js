@@ -26,6 +26,19 @@ export async function exportSnapshot(ref, filename = "values.png", options = {})
   if (!html2canvas) return;
 
   const cleanup = [];
+
+  // Temporarily hide elements matching selectors
+  const hidden = [];
+  if (options.hideSelectors) {
+    const nodes = Array.from(document.querySelectorAll(options.hideSelectors));
+    nodes.forEach((node) => {
+      const prev = node.style.visibility;
+      node.style.visibility = "hidden";
+      hidden.push({ node, prev });
+    });
+    cleanup.push(() => hidden.forEach(({ node, prev }) => (node.style.visibility = prev)));
+  }
+
   if (options.monochrome) {
     const prevFilter = el.style.filter;
     const prevColor = el.style.color;

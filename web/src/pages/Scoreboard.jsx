@@ -5,7 +5,6 @@ import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/ho
 import { WaffleChart } from "../components/charts/WaffleChart";
 import { exportSnapshot } from "../utils/exportSnapshot";
 import { exportAssemblyDeck } from "../utils/exportAssemblyDeck";
-import { renderWaffleImage } from "../utils/renderWaffleImage";
 import {
   Bar,
   BarChart,
@@ -47,6 +46,28 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+
+function generateSummaryLine({
+  leader,
+  prevLeader,
+  leaderMargin,
+  strongestDeltaHouse,
+  periodLabel, // "week" | "term"
+}) {
+  if (leader && prevLeader && leader !== prevLeader) {
+    return `${leader} takes the lead this ${periodLabel} after a strong performance.`;
+  }
+
+  if (leaderMargin <= 10 && strongestDeltaHouse) {
+    return `A tight contest at the top, with ${strongestDeltaHouse} closing the gap.`;
+  }
+
+  if (leader) {
+    return `${leader} maintains a strong lead this ${periodLabel}.`;
+  }
+
+  return `Competition remains open this ${periodLabel}.`;
+}
 
 const ICON_MAP = {
   shield: Shield,
@@ -789,6 +810,11 @@ function TopRoundedBar(props) {
 
   if (width <= 0 || height <= 0) return null;
 
+  const patternId = payload
+    ? `brick-${payload.houseKey || payload.house_id || payload.houseId || payload.id}`
+    : null;
+  const resolvedFill = patternId ? `url(#${patternId})` : (payload?.color ?? fill);
+
   const radius = Math.min(18, height);
   const bottomY = y + height;
   const rightX = x + width;
@@ -816,7 +842,7 @@ function TopRoundedBar(props) {
     <g>
       <path
         d={path}
-        fill={payload?.color ?? fill}
+        fill={resolvedFill}
         stroke="#0f172a"
         strokeWidth={2}
         strokeLinejoin="round"
@@ -928,7 +954,12 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const [submissionsError, setSubmissionsError] = useState("");
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
+  const prevTermLeaderRef = useRef(null);
   const chartRef = useRef(null);
+  const weekChartRef = useRef(null);
+  const termChartRef = useRef(null);
+  const weekTrackRef = useRef(null);
+  const termTrackRef = useRef(null);
   const valuesRef = useRef(null);
   const [aiHighlights, setAiHighlights] = useState({});
   const [valuesData, setValuesData] = useState({ houses: [], years: [] });
@@ -945,7 +976,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
   const [showTermYearBars, setShowTermYearBars] = useState(false);
   const [valueCaptions, setValueCaptions] = useState({ houses: {}, years: {} });
   const [deepDive, setDeepDive] = useState(false);
-  const [exporting, setExporting] = useState({ png: false, print: false, slides: false });
+  const [exporting, setExporting] = useState({ png: false, slides: false });
   const currentPeriod = activeSlide === 0 ? "week" : "term";
   const highlightsText = aiHighlights[currentPeriod];
   const housesData = valuesData.houses || valuesData.data || [];
@@ -1369,6 +1400,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     };
   }, [currentPeriod]);
 
+  // Global listener for admin-triggered PPT export
   const thisWeekTotal = useMemo(
     () => (scoreboard.totalsThisWeek || []).reduce((acc, house) => acc + (house.points || 0), 0),
     [scoreboard.totalsThisWeek]
@@ -1684,6 +1716,119 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       }, {}),
     [termRows]
   );
+  const weekSummaryLine = useMemo(() => {
+    const sorted = [...weekRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+    const leader = sorted[0];
+    const second = sorted[1];
+    const leaderName = leader ? (getHouseById(leader.houseKey)?.name || leader.name || leader.houseKey) : null;
+    const prevLeaderName = prevWeekLeaderRef.current
+      ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+      : null;
+    const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
+    const bestDelta = Object.entries(houseDelta || {}).reduce(
+      (best, [key, val]) => (val > (best?.val ?? -Infinity) ? { key, val } : best),
+      null
+    );
+    const strongestDeltaHouse = bestDelta && bestDelta.val > 0 ? (getHouseById(bestDelta.key)?.name || bestDelta.key) : null;
+    return generateSummaryLine({
+      leader: leaderName,
+      prevLeader: prevLeaderName,
+      leaderMargin,
+      strongestDeltaHouse,
+      periodLabel: "week",
+    });
+  }, [weekRows, houseDelta]);
+
+  const termSummaryLine = useMemo(() => {
+    const sorted = [...termRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+    const leader = sorted[0];
+    const second = sorted[1];
+    const leaderName = leader ? (getHouseById(leader.houseKey)?.name || leader.name || leader.houseKey) : null;
+    const prevLeaderName = prevTermLeaderRef.current
+      ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+      : null;
+    const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
+    const bestDelta = Object.entries(houseDelta || {}).reduce(
+      (best, [key, val]) => (val > (best?.val ?? -Infinity) ? { key, val } : best),
+      null
+    );
+    const strongestDeltaHouse = bestDelta && bestDelta.val > 0 ? (getHouseById(bestDelta.key)?.name || bestDelta.key) : null;
+    return generateSummaryLine({
+      leader: leaderName,
+      prevLeader: prevLeaderName,
+      leaderMargin,
+      strongestDeltaHouse,
+      periodLabel: "term",
+    });
+  }, [termRows, houseDelta]);
+
+  useEffect(() => {
+    const handler = () => {
+      const currentRows = currentPeriod === "week" ? weekRows : termRows;
+      const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+      const leaderRow = sorted[0];
+      const secondRow = sorted[1];
+      const leaderName = leaderRow
+        ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+        : "—";
+      const leaderColor = leaderRow
+        ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+        : "#2563eb";
+      const leaderMargin = leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
+      const prevLeaderName =
+        currentPeriod === "week"
+          ? (prevWeekLeaderRef.current
+            ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+            : null)
+          : (prevTermLeaderRef.current
+            ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+            : null);
+      const chartData = currentRows.map((row) => ({
+        name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+        points: row.points || 0,
+        color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+      }));
+
+      exportAssemblyDeck({
+        view: currentPeriod,
+        periodLabel: currentPeriod === "week" ? "week" : "term",
+        updatedLabel: lastUpdatedLabel,
+        summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
+        leader: {
+          name: leaderName,
+          color: leaderColor,
+          margin: leaderMargin,
+          prevLeader: prevLeaderName,
+        },
+        chartData,
+        deltas: houseDelta,
+        totalValues,
+        houses: sortedHouses.map((id) => ({
+          id,
+          name: HOUSES[id].name,
+          data: valuesByHouse[id] || [],
+          caption: valueCaptions.houses?.[id],
+          color: HOUSES[id].color,
+        })),
+        colours: categoryColorMap,
+      }).catch((err) => console.error("Admin-triggered PPT export failed", err));
+    };
+
+    window.addEventListener("export-assembly-ppt", handler);
+    return () => window.removeEventListener("export-assembly-ppt", handler);
+  }, [
+    currentPeriod,
+    weekRows,
+    termRows,
+    weekSummaryLine,
+    termSummaryLine,
+    houseDelta,
+    totalValues,
+    sortedHouses,
+    valuesByHouse,
+    categoryColorMap,
+    lastUpdatedLabel,
+  ]);
 
   const weekTimeProgress = clamp(getWeekProgress());
 
@@ -1951,6 +2096,10 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
     !termAllZeroPoints &&
     !termAllEqualPoints &&
     Boolean(termLeadingRow);
+
+  useEffect(() => {
+    prevTermLeaderRef.current = termLeadingHouseKey;
+  }, [termLeadingHouseKey]);
   const termLeaderMessage = (() => {
     if (termAllZeroPoints) return "No leaders so far";
     if (termAllEqualPoints) return "It's a TIE!";
@@ -2002,6 +2151,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       </p>
     </div>
   ) : null;
+  const weekLeadingHouseFooter = leadingHouseFooter;
   const termLeadingHouseFooter = termLeaderMessage ? (
     <div className="flex items-center justify-end gap-3">
       {termShowTrophy && (
@@ -2100,6 +2250,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
                     Keep adding points before Friday noon.
                   </p>
+                  <p className="text-xs text-slate-200 mt-1 leading-tight truncate">
+                    {weekSummaryLine}
+                  </p>
                 </div>
               )}
 
@@ -2129,34 +2282,71 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   ) : error ? (
                     <p className="text-sm text-rose-600">{error}</p>
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={weekRows}
-                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
-                        barCategoryGap="0%"
-                        barGap={0}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="houseKey"
-                          tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
-                          tickLine={false}
-                          axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
-                        />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
-                        <Tooltip content={renderYearTooltip} />
-                        <Bar
-                          dataKey="points"
-                          shape={(props) => (
-                            <TopRoundedBar
-                              {...props}
-                              leadingHouseKey={weekLeadingHouseKey}
-                              highlightHouseKeys={tiedHouseKeys}
-                            />
-                          )}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="relative h-full">
+                      <div className="absolute right-0 top-0 flex gap-2 no-export z-10">
+                        <button
+                          className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
+                          onClick={() =>
+                            exportSnapshot(
+                              weekChartRef,
+                              `week-houses-${new Date().toISOString().slice(0, 10)}.png`,
+                              { hideSelectors: ".no-export" }
+                            )
+                          }
+                        >
+                          Export PNG
+                        </button>
+                      </div>
+                      <ResponsiveContainer ref={weekChartRef} width="100%" height="100%">
+                        <BarChart
+                          data={weekRows}
+                          margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                          barCategoryGap="0%"
+                          barGap={0}
+                        >
+                          <defs>
+                            {weekRows.map((row) => {
+                              const color =
+                                weekAxisMap[row.houseKey]?.color ||
+                                getHouseById(row.houseKey)?.color ||
+                                "#94a3b8";
+                              return (
+                                <pattern
+                                  key={`brick-${row.houseKey}`}
+                                  id={`brick-${row.houseKey}`}
+                                  width="8"
+                                  height="6"
+                                  patternUnits="userSpaceOnUse"
+                                >
+                                  <rect width="8" height="6" fill={color} />
+                                  <rect x="0" y="0" width="8" height="3" fill="rgba(0,0,0,0.14)" />
+                                  <rect x="0" y="3" width="4" height="3" fill="rgba(0,0,0,0.14)" />
+                                </pattern>
+                              );
+                            })}
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis
+                            dataKey="houseKey"
+                            tick={(props) => <HouseAxisTick {...props} axisMetaMap={weekAxisMap} />}
+                            tickLine={false}
+                            axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
+                          />
+                          <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                          <Tooltip content={renderYearTooltip} />
+                          <Bar
+                            dataKey="points"
+                            shape={(props) => (
+                              <TopRoundedBar
+                                {...props}
+                                leadingHouseKey={weekLeadingHouseKey}
+                                highlightHouseKeys={tiedHouseKeys}
+                              />
+                            )}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
                 <div className="mt-4 space-y-2">
@@ -2256,23 +2446,45 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </div>
 
               {/* Race Track for Week */}
-              <ProgressTrack
-                title="RACE FOR THE WEEK!"
-                subtitle={weekRangeLabel}
-                rows={weekRows}
-                timeProgress={weekTimeProgress}
-                placeholderText="Week data unavailable"
-                highlightHouseKeys={tiedHouseKeys}
-                timePillType="weekday"
-                finishLabel="Finish · Friday 12:00"
-                timePillPrimaryColor={leadingHouseColor}
-                timePillTieColors={tieHouseColors}
-                footer={leadingHouseFooter}
-                titleColor={WEEK_TITLE_COLOR}
-                borderStyle={weekTrackBorderStyle}
-                leaderHouseKey={weekLeadingHouseKey}
-                onFinish={fireConfettiBurst}
-              />
+              <div className="relative">
+                <div
+                  ref={weekTrackRef}
+                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                  style={{ position: "relative" }}
+                >
+                  <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+                    <button
+                      className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
+                      onClick={() =>
+                        exportSnapshot(
+                          weekTrackRef,
+                          `week-track-${new Date().toISOString().slice(0, 10)}.png`,
+                          { hideSelectors: ".no-export" }
+                        )
+                      }
+                    >
+                      Export PNG
+                    </button>
+                  </div>
+                  <ProgressTrack
+                    title="RACE FOR THE WEEK!"
+                    subtitle={weekRangeLabel}
+                    rows={weekRows}
+                    timeProgress={weekTimeProgress}
+                    placeholderText="Week data unavailable"
+                    highlightHouseKeys={tiedHouseKeys}
+                    timePillType="weekday"
+                    finishLabel="Finish · Friday 12:00"
+                    timePillPrimaryColor={leadingHouseColor}
+                    timePillTieColors={tieHouseColors}
+                    footer={weekLeadingHouseFooter}
+                    titleColor={WEEK_TITLE_COLOR}
+                    borderStyle={weekTrackBorderStyle}
+                    leaderHouseKey={weekLeadingHouseKey}
+                    onFinish={fireConfettiBurst}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2300,6 +2512,9 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   </p>
                   <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
                     Points earned so far this term.
+                  </p>
+                  <p className="text-xs text-slate-200 mt-1 leading-tight truncate">
+                    {termSummaryLine}
                   </p>
                 </div>
               )}
@@ -2330,13 +2545,48 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   </div>
                 ) : (
                   <div className="relative w-full" style={{ height: "400px" }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                    <div className="absolute right-0 top-0 flex gap-2 no-export z-10">
+                      <button
+                        className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
+                        onClick={() =>
+                          exportSnapshot(
+                            termChartRef,
+                            `term-houses-${new Date().toISOString().slice(0, 10)}.png`,
+                            { hideSelectors: ".no-export" }
+                          )
+                        }
+                      >
+                        Export PNG
+                      </button>
+                    </div>
+                    <ResponsiveContainer ref={termChartRef} width="100%" height="100%">
                       <BarChart
                         data={termRows}
                         margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
                         barCategoryGap="0%"
                         barGap={0}
                       >
+                        <defs>
+                          {termRows.map((row) => {
+                            const color =
+                              termAxisMap[row.houseKey]?.color ||
+                              getHouseById(row.houseKey)?.color ||
+                              "#94a3b8";
+                            return (
+                              <pattern
+                                key={`brick-${row.houseKey}`}
+                                id={`brick-${row.houseKey}`}
+                                width="8"
+                                height="6"
+                                patternUnits="userSpaceOnUse"
+                              >
+                                <rect width="8" height="6" fill={color} />
+                                <rect x="0" y="0" width="8" height="3" fill="rgba(0,0,0,0.14)" />
+                                <rect x="0" y="3" width="4" height="3" fill="rgba(0,0,0,0.14)" />
+                              </pattern>
+                            );
+                          })}
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="houseKey"
@@ -2459,25 +2709,47 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
               </div>
 
               {/* Race Track for Term */}
-              <ProgressTrack
-                title="RACE FOR THE TERM!!!"
-                subtitle={termSubtitle}
-                rows={termRows}
-                timeProgress={termTimeProgress}
-                disabled={termDisabled}
-                placeholderText="No active term"
-                highlightHouseKeys={termTiedHouseKeys}
-                timePillType="date"
-                finishLabel="Finish · 13th Feb"
-                titleColor={TERM_TITLE_COLOR}
-                borderStyle={termTrackBorderStyle}
-                timePillPrimaryColor={termLeadingHouseColor}
-                timePillTieColors={termTieColors}
-                footer={termLeadingHouseFooter}
-                termEndDate={termEndDate}
-                leaderHouseKey={termLeadingHouseKey}
-                onFinish={fireConfettiBurst}
-              />
+              <div className="relative">
+                <div
+                  ref={termTrackRef}
+                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                  style={{ position: "relative" }}
+                >
+                  <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+                    <button
+                      className="rounded-full bg-blue-600 text-white text-xs px-3 py-1 shadow-sm hover:bg-blue-700"
+                      onClick={() =>
+                        exportSnapshot(
+                          termTrackRef,
+                          `term-track-${new Date().toISOString().slice(0, 10)}.png`,
+                          { hideSelectors: ".no-export" }
+                        )
+                      }
+                    >
+                      Export PNG
+                    </button>
+                  </div>
+                  <ProgressTrack
+                    title="RACE FOR THE TERM!!!"
+                    subtitle={termSubtitle}
+                    rows={termRows}
+                    timeProgress={termTimeProgress}
+                    disabled={termDisabled}
+                    placeholderText="No active term"
+                    highlightHouseKeys={termTiedHouseKeys}
+                    timePillType="date"
+                    finishLabel="Finish · 13th Feb"
+                    titleColor={TERM_TITLE_COLOR}
+                    borderStyle={termTrackBorderStyle}
+                    timePillPrimaryColor={termLeadingHouseColor}
+                    timePillTieColors={termTieColors}
+                    footer={termLeadingHouseFooter}
+                    termEndDate={termEndDate}
+                    leaderHouseKey={termLeadingHouseKey}
+                    onFinish={fireConfettiBurst}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2487,7 +2759,10 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-4 w-4 text-yellow-500" />
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2
+              className="highlight-title text-lg font-semibold uppercase tracking-[0.4em] text-slate-900"
+              style={PLAYFUL_FONT}
+            >
               {currentPeriod === "week" ? "This Week's Highlights" : "Term Highlights"}
             </h2>
           </div>
@@ -2500,7 +2775,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
       )}
 
       {!valuesLoading && (
-      <div ref={valuesRef} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div ref={valuesRef} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -2525,7 +2800,8 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                   try {
                     await exportSnapshot(
                       valuesRef,
-                      `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`
+                      `values-${currentPeriod}-${new Date().toISOString().slice(0, 10)}.png`,
+                      { hideSelectors: ".no-export" }
                     );
                   } catch (err) {
                     console.error("Export PNG failed", err);
@@ -2536,7 +2812,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 }}
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
                   exporting.png ? "bg-slate-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
-                }`}
+                } no-export`}
               >
                 <Camera className="h-4 w-4" />
                 {exporting.png ? "Creating…" : "Export PNG"}
@@ -2548,13 +2824,52 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 onClick={async () => {
                   setExporting((p) => ({ ...p, slides: true }));
                   try {
+                    const currentRows = currentPeriod === "week" ? weekRows : termRows;
+                    const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+                    const leaderRow = sorted[0];
+                    const secondRow = sorted[1];
+                    const leaderName = leaderRow
+                      ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+                      : "—";
+                    const leaderColor = leaderRow
+                      ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+                      : "#2563eb";
+                    const leaderMargin =
+                      leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
+                    const prevLeaderName =
+                      currentPeriod === "week"
+                        ? (prevWeekLeaderRef.current
+                          ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+                          : null)
+                        : (prevTermLeaderRef.current
+                          ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+                          : null);
+                    const chartData = currentRows.map((row) => ({
+                      name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+                      points: row.points || 0,
+                      color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+                    }));
+
                     await exportAssemblyDeck({
                       view: currentPeriod,
+                      periodLabel: currentPeriod === "week" ? "week" : "term",
+                      updatedLabel: lastUpdatedLabel,
+                      summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
+                      leader: {
+                        name: leaderName,
+                        color: leaderColor,
+                        margin: leaderMargin,
+                        prevLeader: prevLeaderName,
+                      },
+                      chartData,
+                      deltas: houseDelta,
                       totalValues,
                       houses: sortedHouses.map((id) => ({
+                        id,
                         name: HOUSES[id].name,
                         data: valuesByHouse[id] || [],
                         caption: valueCaptions.houses?.[id],
+                        color: HOUSES[id].color,
                       })),
                       colours: categoryColorMap,
                     });
@@ -2567,7 +2882,7 @@ export function ScoreboardContent({ showMissing = true, showTotalsPanel = true, 
                 }}
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
                   exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
-                }`}
+                } no-export`}
               >
                 <Presentation className="h-4 w-4" />
                 {exporting.slides ? "Building…" : "Export slides"}

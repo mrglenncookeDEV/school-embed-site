@@ -7,6 +7,8 @@ import Scoreboard from "./pages/Scoreboard";
 import TeacherSubmit from "./pages/TeacherSubmit";
 import TestHouses from "./pages/TestHouses";
 
+const PLAYFUL_FONT = '"Permanent Marker", "Marker Felt", "Kalam", cursive';
+
 function SlideUpModal({ open, onClose, children }) {
   useEffect(() => {
     if (!open) {
@@ -110,10 +112,14 @@ function AppContent() {
               />
               <div>
                 <p className="text-sm uppercase tracking-[0.2em] text-slate-500 whitespace-nowrap">
-                  House Points
-                </p>
-                <p className="text-2xl font-semibold text-slate-900 whitespace-nowrap">
                   Weekly Competition
+                </p>
+                <p
+                  className="text-2xl font-light text-slate-900 whitespace-nowrap highlight-title flex items-center gap-2"
+                  style={{ fontFamily: PLAYFUL_FONT }}
+                >
+                  <span className="text-sky-500 text-2xl" aria-hidden="true">🏠</span>
+                  House Points
                 </p>
               </div>
             </div>

@@ -30,6 +30,9 @@ import {
   ChevronUp,
 } from "lucide-react";
 
+const REPORTS_BASE = "/reports/values";
+const DEFAULT_PERIOD = "week";
+
 function CollapsibleSection({ title, subtitle, action, children, defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -66,6 +69,8 @@ function CollapsibleSection({ title, subtitle, action, children, defaultOpen = f
 
 export default function Admin() {
   const [entries, setEntries] = useState([]);
+  const [entryRange, setEntryRange] = useState("week"); // week | term | all
+  const [filteredEntries, setFilteredEntries] = useState([]);
   const [classes, setClasses] = useState([]);
   const [houses, setHouses] = useState([]);
   const [audit, setAudit] = useState([]);
@@ -77,7 +82,8 @@ export default function Admin() {
   const [actionMessage, setActionMessage] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [activeTab, setActiveTab] = useState("entries");
+  const [activeTab, setActiveTab] = useState("setup");
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
@@ -115,6 +121,13 @@ export default function Admin() {
   const [isSavingTerm, setIsSavingTerm] = useState(false);
   const [terms, setTerms] = useState([]);
   const [loadingTerms, setLoadingTerms] = useState(true);
+  const openReport = (audience = "staff", extra = "") => {
+    const url = `${staffReportUrl(audience)}${extra}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const staffReportUrl = (audience = "staff") =>
+    `${REPORTS_BASE}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${import.meta.env.VITE_STAFF_REPORT_SECRET}`;
 
   const AVAILABLE_ICONS = [
     { id: "shield", icon: Shield },
@@ -142,16 +155,23 @@ export default function Admin() {
     { id: "sparkles", icon: Sparkles },
   ];
 
-  const loadEntries = async () => {
+  const rangeToQuery = (range) => {
+    if (range === "term") return "term";
+    if (range === "all") return "all";
+    return "current";
+  };
+
+  const loadEntries = async (range = entryRange) => {
     setLoadingEntries(true);
     setError("");
     try {
-      const response = await fetch("/api/entries?week=all");
+      const response = await fetch(`/api/entries?week=${rangeToQuery(range)}`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load entries");
       }
       setEntries(payload.entries);
+      setFilteredEntries(payload.entries);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -224,7 +244,7 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    loadEntries();
+    loadEntries(entryRange);
     loadClasses();
     loadHouses();
     loadTerms();
@@ -254,6 +274,64 @@ export default function Admin() {
 
   const requestDelete = (id) => {
     setConfirmDeleteId(id);
+  };
+
+  const exportEntriesCsv = () => {
+    if (!filteredEntries.length) {
+      alert("No submissions to export.");
+      return;
+    }
+    const headers = ["Class", "House", "Points", "Category", "Submitted by", "Date", "Notes"];
+    const rows = filteredEntries.map((e) => [
+      e.class_name,
+      e.house_name,
+      e.points,
+      e.award_category || "General",
+      e.submitted_by_email,
+      e.entry_date,
+      (e.notes || "").replace(/\r?\n/g, " "),
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `submissions-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkDelete = async () => {
+    const scopeInput = (window.prompt("Delete scope? Type: week / term / all", "week") || "").toLowerCase();
+    const scope = ["week", "term", "all"].includes(scopeInput) ? scopeInput : "week";
+    const scopeLabel =
+      scope === "week" ? "the current week" : scope === "term" ? "the current term" : "ALL time";
+    if (!window.confirm(`This will delete all submissions for ${scopeLabel}. This cannot be undone.`)) return;
+    const pin = window.prompt("Enter 6-digit PIN to confirm (warning: irreversible):");
+    if (pin !== "200903") {
+      alert("PIN incorrect. No changes made.");
+      return;
+    }
+    if (!window.confirm("Final warning: this action cannot be undone. Proceed?")) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/entries/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, actorEmail: "admin@school.local" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || "Bulk delete failed");
+      setActionMessage("Entries deleted.");
+      await loadEntries(entryRange);
+      await loadAudit();
+    } catch (err) {
+      setActionMessage(err.message || "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const openTeacherSubmitModalForEntry = (entry) => {
@@ -529,12 +607,45 @@ export default function Admin() {
       {activeTab === "entries" && (
         <>
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 px-4 text-xs uppercase tracking-[0.4em] text-slate-500">Submissions</h2>
+            <div className="mb-3 flex items-center justify-between px-4 gap-3 flex-wrap">
+              <h2 className="text-xs uppercase tracking-[0.4em] text-slate-500">Submissions</h2>
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <select
+                  value={entryRange}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setEntryRange(next);
+                    loadEntries(next);
+                  }}
+                  className="rounded-full border border-slate-200 px-2 py-1 text-slate-700"
+                >
+                  <option value="week">This week</option>
+                  <option value="term">This term</option>
+                  <option value="all">All time</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={exportEntriesCsv}
+                  className="rounded-full bg-slate-900 text-white px-3 py-1 font-semibold shadow-sm hover:bg-slate-800"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="rounded-full bg-rose-600 text-white px-3 py-1 font-semibold shadow-sm hover:bg-rose-500 disabled:opacity-60"
+                  title="Deletes selected scope permanently"
+                >
+                  {bulkDeleting ? "Deleting…" : "Delete ALL"}
+                </button>
+              </div>
+            </div>
             {loadingEntries ? (
               <p className="px-4 text-sm text-slate-500">Loading entries…</p>
             ) : error ? (
               <p className="px-4 text-sm text-rose-600">{error}</p>
-            ) : entries.length === 0 ? (
+            ) : filteredEntries.length === 0 ? (
               <p className="px-4 py-6 text-sm text-slate-600">No submissions yet.</p>
             ) : (
               <div className="overflow-x-auto">
@@ -552,7 +663,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {entries.map((entry) => {
+                    {filteredEntries.map((entry) => {
                       const houseId = entry.house_id || entry.houseId;
                       const houseMeta = getHouseById(houseId);
                       const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
@@ -1269,6 +1380,48 @@ export default function Admin() {
           </div>
         )
       }
-    </section >
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold mb-4">
+          Reports & Exports
+        </h2>
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <button
+            type="button"
+            onClick={() => openReport("staff")}
+            className="rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-800"
+          >
+            Staff / Ofsted values report
+          </button>
+          <button
+            type="button"
+            onClick={() => openReport("parents")}
+            className="rounded-full bg-slate-200 text-slate-900 px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-300"
+          >
+            Parent-safe values report
+          </button>
+          <button
+            type="button"
+            onClick={() => openReport("staff", "&format=pdf")}
+            className="rounded-full bg-indigo-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-indigo-500"
+          >
+            Weekly PDF (staff)
+          </button>
+          <button
+            type="button"
+            onClick={() => openReport("staff", "&format=pdf&monochrome=true")}
+            className="rounded-full bg-slate-700 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-slate-600"
+          >
+            Print-friendly PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("export-assembly-ppt"))}
+            className="rounded-full bg-orange-600 text-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-orange-500"
+          >
+            Assembly slides (PPT)
+          </button>
+        </div>
+      </section>
+    </section>
   );
 }
