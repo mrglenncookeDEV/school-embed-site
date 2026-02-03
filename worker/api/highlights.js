@@ -9,10 +9,11 @@ You are writing a short public-facing highlights summary for a school scoreboard
 
 Rules:
 - Use positive, celebratory language only
+- Keep the tone upbeat and conversational (think "Wow, what a week!" or "Absolutely buzzing")
+- Paraphrase the teacher notes and reshape them into an energised narrative instead of repeating them verbatim
 - You MAY include individual pupil first names if they appear in the comments
-- Do NOT invent names
-- Do NOT infer behaviour issues
-- Focus on effort, teamwork, kindness, achievement
+- Do NOT invent names or infer behaviour issues
+- Focus on effort, teamwork, kindness, achievement, and community spirit
 - 2–4 short sentences
 - British English
 - Suitable for display on a school website
@@ -87,6 +88,13 @@ const getPeriodRange = async (period, db) => {
   };
 };
 
+const ensureSentence = (value) => {
+  if (!value) return "";
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
+
 export async function onRequest({ env, request }) {
   try {
     const url = new URL(request.url);
@@ -148,10 +156,19 @@ export async function onRequest({ env, request }) {
       return json({ text: null });
     }
 
-    const first = fallbackNotes[0];
-    const rest = fallbackNotes.slice(1);
-    const tail = rest.length ? ` More wins: ${rest.join(" · ")}` : "";
-    const fallback = `Highlights: ${first}${tail}`;
+    const periodDescriptor = period === "term" ? "this term" : "this week";
+    const firstSentence = ensureSentence(fallbackNotes[0]);
+    const remainingSentences = fallbackNotes
+      .slice(1)
+      .map((note) => {
+        const sentence = ensureSentence(note);
+        return sentence ? `Also, ${sentence}` : "";
+      })
+      .filter(Boolean);
+    const opener = firstSentence
+      ? `What a vibrant ${periodDescriptor} we've had! ${firstSentence}`
+      : `What a vibrant ${periodDescriptor} we've had!`;
+    const fallback = [opener, ...remainingSentences].join(" ");
 
     return json({ text: fallback });
   } catch (error) {

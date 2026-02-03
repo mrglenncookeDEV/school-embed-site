@@ -1780,11 +1780,10 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
       : null;
     const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
-    const bestDelta = Object.entries(houseDelta || {}).reduce(
-      (best, [key, val]) => (val > (best?.val ?? -Infinity) ? { key, val } : best),
-      null
-    );
-    const strongestDeltaHouse = bestDelta && bestDelta.val > 0 ? (getHouseById(bestDelta.key)?.name || bestDelta.key) : null;
+    const strongestDeltaHouse =
+      second && leaderMargin <= 10
+        ? getHouseById(second.houseKey)?.name || second.name || second.houseKey
+        : null;
     return generateSummaryLine({
       leader: leaderName,
       prevLeader: prevLeaderName,
@@ -1803,11 +1802,10 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
       : null;
     const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
-    const bestDelta = Object.entries(houseDelta || {}).reduce(
-      (best, [key, val]) => (val > (best?.val ?? -Infinity) ? { key, val } : best),
-      null
-    );
-    const strongestDeltaHouse = bestDelta && bestDelta.val > 0 ? (getHouseById(bestDelta.key)?.name || bestDelta.key) : null;
+    const strongestDeltaHouse =
+      second && leaderMargin <= 10
+        ? getHouseById(second.houseKey)?.name || second.name || second.houseKey
+        : null;
     return generateSummaryLine({
       leader: leaderName,
       prevLeader: prevLeaderName,
@@ -2779,7 +2777,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
           </div>
 
       {highlightsText !== undefined && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
+        <div className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_20px_45px_rgba(15,23,42,0.25)] mb-6 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-4 w-4 text-yellow-500" />
             <h2
@@ -2794,6 +2792,16 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
               ? "I need more teacher notes to produce highlights for this week"
               : "I need more teacher notes to produce highlights for this term")}
           </p>
+          <div className="pointer-events-none absolute top-0 right-0 h-14 w-14">
+            <div
+              className="absolute inset-0 border-l border-t border-slate-200 shadow-lg"
+              style={{ background: "white", clipPath: "polygon(0 0, 100% 0, 100% 100%)" }}
+            />
+            <div
+              className="absolute inset-2 border-l border-t border-slate-100"
+              style={{ background: "rgba(148, 163, 184, 0.45)", clipPath: "polygon(0 0, 100% 0, 100% 100%)" }}
+            />
+          </div>
         </div>
       )}
 
@@ -2917,38 +2925,25 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
           </div>
 
             <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-stretch md:gap-10">
-              <div>
-                {strongestValue && (
-                  <div
-                    className="inline-flex items-center gap-2 px-5 py-2.5 mb-3 rounded-full text-sm font-semibold shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-2 ring-white/80"
-                    style={{
-                      background: `linear-gradient(135deg, ${categoryColorMap[strongestValue.category] || "#94a3b8"}44, ${categoryColorMap[strongestValue.category] || "#94a3b8"}22 40%, #f1f5f9)` ,
-                      color: "#0f172a",
-                      boxShadow: "0 12px 28px rgba(0,0,0,0.22), inset 0 1px 6px rgba(255,255,255,0.9)",
-                      border: `1px solid ${(categoryColorMap[strongestValue.category] || "#94a3b8")}66`,
-                    }}
-                  >
-                    <span className="text-lg">✨</span>
-                    <span>
-                      This {currentPeriod === "week" ? "week’s" : "term’s"} strongest value:{" "}
-                      <span className="capitalize">{strongestValue.category}</span>
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-8 md:gap-12 items-start">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4">
+                  <h3 className="text-lg font-semibold text-slate-700">
+                    Whole school
+                  </h3>
+                  <div className="waffle-grid">
+                    <WaffleChart
+                      data={totalValues}
+                      colours={categoryColorMap}
+                      size="xl"
+                    />
                   </div>
-                )}
-                <h4 className="mb-3 text-sm font-semibold text-slate-700">
-                  Whole school
-                </h4>
-                <WaffleChart
-                  data={totalValues}
-                  colours={categoryColorMap}
-                  size="xl"
-                />
+                </div>
               </div>
 
-              <div className="mt-4 md:mt-0 flex-1 space-y-2 text-sm">
+              <div className="flex flex-col gap-3 pt-[calc(1.75rem+0.5rem)] text-sm">
                 {awardCategories.map((cat) => (
-                  <div key={cat} className="flex items-center gap-3">
+                  <div key={cat} className="flex gap-3 items-start">
                     <span
                       className="inline-block w-3 h-3 rounded-full"
                       style={{ backgroundColor: categoryColorMap[cat] || "#e5e7eb" }}
@@ -2962,6 +2957,28 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                   Each circle represents 1% of points awarded
                 </p>
               </div>
+
+              {strongestValue && (
+                <div className="flex flex-col gap-2 pt-[calc(1.75rem+0.5rem)]">
+                  <div
+                    className="rounded-3xl border px-4 py-2.5 text-sm font-semibold shadow-[0_12px_18px_rgba(15,23,42,0.35)]"
+                    style={{
+                      background: "linear-gradient(135deg, #fef3c7 0%, #d4af37 60%, #a0711c 100%)",
+                      borderColor: "#c49117",
+                      color: "#0f172a",
+                      boxShadow: "0 15px 30px rgba(15,23,42,0.45), inset 0 1px 5px rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    <span className="text-base leading-snug flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-amber-600" />
+                      <span>
+                        This {currentPeriod === "week" ? "week’s" : "term’s"} strongest value:{" "}
+                        <span className="capitalize">{strongestValue.category}</span>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">

@@ -6,7 +6,7 @@ import EmbedScoreboard from "./pages/EmbedScoreboard";
 import Scoreboard from "./pages/Scoreboard";
 import TeacherSubmit from "./pages/TeacherSubmit";
 import TestHouses from "./pages/TestHouses";
-import { Presentation, Printer, Camera, User, Shield } from "lucide-react";
+import { Presentation, Printer, Camera, User, Shield, ChevronDown } from "lucide-react";
 
 const PLAYFUL_FONT = '"Permanent Marker", "Marker Felt", "Kalam", cursive';
 
@@ -132,6 +132,7 @@ function AppContent() {
   const location = useLocation();
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const isEmbedRoute = location.pathname.startsWith("/embed/");
   const origin =
     typeof window !== "undefined" && window.location?.origin
@@ -175,6 +176,17 @@ function AppContent() {
     { label: "Submit Points", action: () => openTeacherSubmit(null) },
     { label: "Admin", to: "/admin" },
   ];
+  const reportLinks = [
+    { label: "Staff / Ofsted report", to: "/reports/staff" },
+    { label: "Parent-safe report", to: "/reports/parents" },
+    { label: "Weekly staff PDF", to: "/reports/weekly-pdf" },
+    { label: "Print-friendly PDF", to: "/reports/print-pdf" },
+  ];
+  useEffect(() => {
+    const handleClick = () => setReportsOpen(false);
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
   useEffect(() => {
     if (location.pathname === "/teacher") {
       // Defer to next tick to avoid synchronous setState inside effect
@@ -227,6 +239,35 @@ function AppContent() {
             </div>
 
             <nav className="flex flex-wrap items-center gap-3 text-sm font-medium sm:flex-nowrap">
+              <div className="relative" onClick={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setReportsOpen((open) => !open)}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900 flex items-center gap-1"
+                >
+                  Reports
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                {reportsOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex flex-col">
+                      {reportLinks.map((link) => (
+                        <NavLink
+                          key={link.to}
+                          to={link.to}
+                          className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          onClick={() => setReportsOpen(false)}
+                        >
+                          {link.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               {navItems.map((item) => {
                 if (item.action) {
                   return (
