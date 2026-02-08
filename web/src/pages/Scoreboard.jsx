@@ -2188,36 +2188,43 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
   return (
     <section className={`${containerClasses} w-full`}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500">Live scoreboard</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1 min-w-0">
+          <p className="text-sm font-semibold uppercase tracking-[0.4em] text-slate-500 whitespace-nowrap">Live scoreboard</p>
           <p className="text-[9px] text-slate-600">Updated: {lastUpdatedLabel}</p>
         </div>
 
-        {/* Navigation Buttons */}
-        <div className="flex gap-2">
-          {activeSlide === 1 && (
+        {/* Sliding Pill Toggle */}
+        <div className="relative shrink-0">
+          <div className="relative flex items-center rounded-full border border-slate-200 bg-slate-100 p-1 shadow-sm">
+            <div
+              className={`absolute left-1 top-1 h-[calc(100%-8px)] w-[calc(50%-4px)] rounded-full shadow-md transition-transform duration-300 ${activeSlide === 0 ? "bg-blue-600" : "bg-red-600"} `}
+              style={{ transform: activeSlide === 0 ? "translateX(0%)" : "translateX(100%)" }}
+              aria-hidden="true"
+            />
             <button
+              type="button"
               onClick={() => setActiveSlide(0)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-blue-600 bg-blue-600 text-white shadow-sm transition hover:bg-blue-500"
+              className={`relative z-10 flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition sm:px-2.5 sm:text-[10px] sm:tracking-[0.2em] ${
+                activeSlide === 0 ? "text-white" : "text-slate-700"
+              }`}
             >
-              <ChevronLeft className="h-5 w-5 text-white" />
-              <span className="text-xs font-semibold uppercase tracking-[0.3em]">
-                THIS WEEK
-              </span>
+              <ChevronLeft className={`h-4 w-4 ${activeSlide === 0 ? "text-white" : "text-slate-500"}`} />
+              <span className="sm:hidden">WEEK</span>
+              <span className="hidden sm:inline">THIS WEEK</span>
             </button>
-          )}
-          {activeSlide === 0 && (
             <button
+              type="button"
               onClick={() => setActiveSlide(1)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-red-600 bg-red-600 text-white shadow-sm transition hover:bg-red-500"
+              className={`relative z-10 flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition sm:px-2.5 sm:text-[10px] sm:tracking-[0.2em] ${
+                activeSlide === 1 ? "text-white" : "text-slate-700"
+              }`}
             >
-              <span className="text-xs font-semibold uppercase tracking-[0.3em]">
-                THIS TERM
-              </span>
-              <ChevronRight className="h-5 w-5 text-white" />
+              <span className="sm:hidden">TERM</span>
+              <span className="hidden sm:inline">THIS TERM</span>
+              <ChevronRight className={`h-4 w-4 ${activeSlide === 1 ? "text-white" : "text-slate-500"}`} />
             </button>
-          )}
+          </div>
         </div>
       </div>
 

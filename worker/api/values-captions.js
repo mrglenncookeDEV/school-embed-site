@@ -69,7 +69,37 @@ const getWeekStart = (date = getLondonDate()) => {
     )
   );
   monday.setUTCHours(0, 0, 0, 0);
+  const fridayReopen = new Date(monday);
+  fridayReopen.setUTCDate(fridayReopen.getUTCDate() + 4);
+  fridayReopen.setUTCHours(15, 15, 0, 0);
+  if (current >= fridayReopen) {
+    monday.setUTCDate(monday.getUTCDate() + 7);
+  }
   return monday;
+};
+
+const getDeadlineFor = (weekStart) => {
+  const deadline = new Date(weekStart);
+  deadline.setUTCDate(deadline.getUTCDate() + 4);
+  deadline.setUTCHours(14, 25, 0, 0);
+  return deadline;
+};
+
+const ensureWeek = async (db, weekStart) => {
+  const weekStartIso = formatDate(weekStart);
+  const deadlineAt = getDeadlineFor(weekStart).toISOString();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO weeks (week_start, deadline_at)
+       VALUES (?, ?)`
+    )
+    .bind(weekStartIso, deadlineAt)
+    .run();
+  const { results } = await db
+    .prepare(`SELECT id, week_start FROM weeks WHERE week_start = ?`)
+    .bind(weekStartIso)
+    .all();
+  return results?.[0] || null;
 };
 
 const getPeriodRange = async (period, db) => {
@@ -80,17 +110,15 @@ const getPeriodRange = async (period, db) => {
         .all();
       const term = results?.[0];
       if (term?.start_date && term?.end_date) {
-        return [term.start_date, term.end_date];
+        return { mode: "term", start: term.start_date, end: term.end_date };
       }
     } catch (error) {
       console.error("values-captions term lookup failed", error);
     }
   }
 
-  const weekStart = getWeekStart();
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-  return [formatDate(weekStart), formatDate(weekEnd)];
+  const week = await ensureWeek(db, getWeekStart());
+  return week ? { mode: "week", weekId: week.id } : { mode: "week", weekId: null };
 };
 
 const sanitizeCaption = (text) => {
@@ -131,27 +159,38 @@ export async function onRequest({ env, request }) {
     };
 
     const period = new URL(request.url).searchParams.get("period") === "term" ? "term" : "week";
-    const [start, end] = await getPeriodRange(period, env.DB);
+    const range = await getPeriodRange(period, env.DB);
 
-    const rows = await env.DB.prepare(
-      `SELECT house_id, award_category, SUM(points) AS total
+    const weekQuery = `SELECT house_id, award_category, SUM(points) AS total
+       FROM point_entries
+       WHERE week_id = ?
+       GROUP BY house_id, award_category`;
+    const weekYearQuery = `SELECT c.YearGrp AS year_group, pe.award_category, SUM(pe.points) AS total
+       FROM point_entries pe
+       JOIN classes c ON c.id = pe.class_id
+       WHERE pe.week_id = ?
+       GROUP BY c.YearGrp, pe.award_category
+       ORDER BY c.YearGrp ASC`;
+    const termQuery = `SELECT house_id, award_category, SUM(points) AS total
        FROM point_entries
        WHERE entry_date BETWEEN ? AND ?
-       GROUP BY house_id, award_category`
-    )
-      .bind(start, end)
-      .all();
-
-    const yearRows = await env.DB.prepare(
-      `SELECT c.YearGrp AS year_group, pe.award_category, SUM(pe.points) AS total
+       GROUP BY house_id, award_category`;
+    const termYearQuery = `SELECT c.YearGrp AS year_group, pe.award_category, SUM(pe.points) AS total
        FROM point_entries pe
        JOIN classes c ON c.id = pe.class_id
        WHERE pe.entry_date BETWEEN ? AND ?
        GROUP BY c.YearGrp, pe.award_category
-       ORDER BY c.YearGrp ASC`
-    )
-      .bind(start, end)
-      .all();
+       ORDER BY c.YearGrp ASC`;
+
+    const rows =
+      range.mode === "week"
+        ? await env.DB.prepare(weekQuery).bind(range.weekId || -1).all()
+        : await env.DB.prepare(termQuery).bind(range.start, range.end).all();
+
+    const yearRows =
+      range.mode === "week"
+        ? await env.DB.prepare(weekYearQuery).bind(range.weekId || -1).all()
+        : await env.DB.prepare(termYearQuery).bind(range.start, range.end).all();
 
     const houseMetaRows = await env.DB.prepare(
       `SELECT id, name

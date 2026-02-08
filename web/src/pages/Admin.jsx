@@ -68,7 +68,7 @@ function CollapsibleSection({ title, subtitle, action, children, defaultOpen = f
 }
 
 export default function Admin() {
-  const [entries, setEntries] = useState([]);
+  const [, setEntries] = useState([]);
   const [entryRange, setEntryRange] = useState("week"); // week | term | all
   const [filteredEntries, setFilteredEntries] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -125,13 +125,7 @@ export default function Admin() {
   const [isSavingTerm, setIsSavingTerm] = useState(false);
   const [terms, setTerms] = useState([]);
   const [loadingTerms, setLoadingTerms] = useState(true);
-  const openReport = (audience = "staff", extra = "") => {
-    const url = `${staffReportUrl(audience)}${extra}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
 
-  const staffReportUrl = (audience = "staff") =>
-    `${REPORTS_BASE}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${import.meta.env.VITE_STAFF_REPORT_SECRET}`;
 
   const AVAILABLE_ICONS = [
     { id: "shield", icon: Shield },
@@ -159,17 +153,18 @@ export default function Admin() {
     { id: "sparkles", icon: Sparkles },
   ];
 
-  const rangeToQuery = (range) => {
+  const rangeToQuery = useCallback((range) => {
     if (range === "term") return "term";
     if (range === "all") return "all";
     return "current";
-  };
+  }, []);
 
-  const loadEntries = async (range = entryRange) => {
+  const loadEntries = useCallback(async (range) => {
+    const effectiveRange = range ?? entryRange;
     setLoadingEntries(true);
     setError("");
     try {
-      const response = await fetch(`${import.meta.env.BASE_URL}api/entries?week=${rangeToQuery(range)}`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/entries?week=${rangeToQuery(effectiveRange)}`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load entries");
@@ -181,9 +176,9 @@ export default function Admin() {
     } finally {
       setLoadingEntries(false);
     }
-  };
+  }, [entryRange, rangeToQuery]);
 
-  const loadClasses = async () => {
+  const loadClasses = useCallback(async () => {
     setLoadingClasses(true);
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}api/classes`);
@@ -197,9 +192,9 @@ export default function Admin() {
     } finally {
       setLoadingClasses(false);
     }
-  };
+  }, []);
 
-  const loadHouses = async () => {
+  const loadHouses = useCallback(async () => {
     setLoadingHouses(true);
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}api/houses`);
@@ -213,7 +208,7 @@ export default function Admin() {
     } finally {
       setLoadingHouses(false);
     }
-  };
+  }, []);
 
   const loadMissingClasses = useCallback(async () => {
     setMissingLoading(true);
@@ -232,7 +227,7 @@ export default function Admin() {
     }
   }, []);
 
-  const loadTerms = async () => {
+  const loadTerms = useCallback(async () => {
     setLoadingTerms(true);
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}api/terms`);
@@ -246,9 +241,9 @@ export default function Admin() {
     } finally {
       setLoadingTerms(false);
     }
-  };
+  }, []);
 
-  const loadAudit = async () => {
+  const loadAudit = useCallback(async () => {
     setLoadingAudit(true);
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}api/audit?limit=50`);
@@ -262,15 +257,18 @@ export default function Admin() {
     } finally {
       setLoadingAudit(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadEntries(entryRange);
+  }, [entryRange, loadEntries]);
+
+  useEffect(() => {
     loadClasses();
     loadHouses();
     loadTerms();
     loadAudit();
-  }, []);
+  }, [loadClasses, loadHouses, loadTerms, loadAudit]);
 
   useEffect(() => {
     if (activeTab === "missing") {
@@ -1339,7 +1337,7 @@ export default function Admin() {
                   House Icon
                 </label>
                 <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1 border border-slate-100 rounded-xl">
-                  {AVAILABLE_ICONS.map(({ id, icon: IconComp }) => (
+                  {AVAILABLE_ICONS.map(({ id }) => (
                     <button
                       key={id}
                       type="button"

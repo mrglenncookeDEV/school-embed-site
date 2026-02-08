@@ -88,10 +88,24 @@ const getWeekStart = (date = getLondonDate()) => {
   return monday;
 };
 
+const getEntryWeekStart = (date = getLondonDate()) => {
+  const current = new Date(date);
+  const monday = getWeekStart(current);
+  const fridayReopen = new Date(monday);
+  fridayReopen.setUTCDate(fridayReopen.getUTCDate() + 4);
+  fridayReopen.setUTCHours(15, 15, 0, 0);
+  if (current >= fridayReopen) {
+    const nextMonday = new Date(monday);
+    nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
+    return nextMonday;
+  }
+  return monday;
+};
+
 const getDeadlineFor = (weekStart) => {
   const deadline = new Date(weekStart);
   deadline.setUTCDate(deadline.getUTCDate() + 4);
-  deadline.setUTCHours(12, 0, 0, 0);
+  deadline.setUTCHours(14, 25, 0, 0);
   return deadline;
 };
 
@@ -101,8 +115,7 @@ const camelizeWeek = (row) => ({
   deadlineAt: row.deadline_at,
 });
 
-async function ensureCurrentWeek(db) {
-  const weekStart = getWeekStart();
+async function ensureWeekForStart(db, weekStart) {
   const weekStartIso = formatDate(weekStart);
   const deadlineAt = getDeadlineFor(weekStart).toISOString();
 
@@ -127,6 +140,10 @@ async function ensureCurrentWeek(db) {
     .all();
 
   return results[0];
+}
+
+async function ensureCurrentWeek(db) {
+  return ensureWeekForStart(db, getEntryWeekStart());
 }
 
 
@@ -1067,7 +1084,7 @@ async function handleApi(request, env, url) {
   }
 
   if (pathname === `/api/entries` && method === "POST") {
-    const week = await ensureCurrentWeek(db);
+    const week = await ensureWeekForStart(db, getEntryWeekStart());
     return handleEntriesPost(request, db, week);
   }
 

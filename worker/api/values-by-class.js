@@ -40,7 +40,37 @@ const getWeekStart = (date = getLondonDate()) => {
     Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() - diff)
   );
   monday.setUTCHours(0, 0, 0, 0);
+  const fridayReopen = new Date(monday);
+  fridayReopen.setUTCDate(fridayReopen.getUTCDate() + 4);
+  fridayReopen.setUTCHours(15, 15, 0, 0);
+  if (current >= fridayReopen) {
+    monday.setUTCDate(monday.getUTCDate() + 7);
+  }
   return monday;
+};
+
+const getDeadlineFor = (weekStart) => {
+  const deadline = new Date(weekStart);
+  deadline.setUTCDate(deadline.getUTCDate() + 4);
+  deadline.setUTCHours(14, 25, 0, 0);
+  return deadline;
+};
+
+const ensureWeek = async (db, weekStart) => {
+  const weekStartIso = formatDate(weekStart);
+  const deadlineAt = getDeadlineFor(weekStart).toISOString();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO weeks (week_start, deadline_at)
+       VALUES (?, ?)`
+    )
+    .bind(weekStartIso, deadlineAt)
+    .run();
+  const { results } = await db
+    .prepare(`SELECT id, week_start FROM weeks WHERE week_start = ?`)
+    .bind(weekStartIso)
+    .all();
+  return results?.[0] || null;
 };
 
 const getPeriodRange = async (period, db) => {
@@ -51,46 +81,56 @@ const getPeriodRange = async (period, db) => {
         .all();
       const term = results?.[0];
       if (term?.start_date && term?.end_date) {
-        return { start: term.start_date, end: term.end_date };
+        return { mode: "term", start: term.start_date, end: term.end_date };
       }
     } catch (error) {
       console.error("values-by-class term lookup failed", error);
     }
   }
 
-  const weekStart = getWeekStart();
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-
-  return {
-    start: formatDate(weekStart),
-    end: formatDate(weekEnd),
-  };
+  const week = await ensureWeek(db, getWeekStart());
+  return week ? { mode: "week", weekId: week.id } : { mode: "week", weekId: null };
 };
 
 export async function onRequest({ env, request }) {
   try {
     const period = new URL(request.url).searchParams.get("period") === "term" ? "term" : "week";
-    const { start, end } = await getPeriodRange(period, env.DB);
+    const range = await getPeriodRange(period, env.DB);
+    const query =
+      range.mode === "week"
+        ? `SELECT
+            c.id AS class_id,
+            c.name AS class_name,
+            c.Teacher_Title AS teacher_title,
+            c.Teacher_FirstName AS teacher_first_name,
+            c.Teacher_LastName AS teacher_last_name,
+            pe.house_id,
+            pe.award_category,
+            SUM(pe.points) AS total_points
+          FROM point_entries pe
+          JOIN classes c ON c.id = pe.class_id
+          WHERE pe.week_id = ?
+          GROUP BY c.id, pe.house_id, pe.award_category
+          ORDER BY c.name ASC`
+        : `SELECT
+            c.id AS class_id,
+            c.name AS class_name,
+            c.Teacher_Title AS teacher_title,
+            c.Teacher_FirstName AS teacher_first_name,
+            c.Teacher_LastName AS teacher_last_name,
+            pe.house_id,
+            pe.award_category,
+            SUM(pe.points) AS total_points
+          FROM point_entries pe
+          JOIN classes c ON c.id = pe.class_id
+          WHERE pe.entry_date BETWEEN ? AND ?
+          GROUP BY c.id, pe.house_id, pe.award_category
+          ORDER BY c.name ASC`;
 
-    const rows = await env.DB.prepare(
-      `SELECT
-        c.id AS class_id,
-        c.name AS class_name,
-        c.Teacher_Title AS teacher_title,
-        c.Teacher_FirstName AS teacher_first_name,
-        c.Teacher_LastName AS teacher_last_name,
-        pe.house_id,
-        pe.award_category,
-        SUM(pe.points) AS total_points
-      FROM point_entries pe
-      JOIN classes c ON c.id = pe.class_id
-      WHERE pe.entry_date BETWEEN ? AND ?
-      GROUP BY c.id, pe.house_id, pe.award_category
-      ORDER BY c.name ASC`
-    )
-      .bind(start, end)
-      .all();
+    const rows =
+      range.mode === "week"
+        ? await env.DB.prepare(query).bind(range.weekId || -1).all()
+        : await env.DB.prepare(query).bind(range.start, range.end).all();
 
     return json({ period, data: rows.results || [] });
   } catch (error) {

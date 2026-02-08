@@ -20,7 +20,6 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
   const [form, setForm] = useState(initialForm);
   const [classes, setClasses] = useState([]);
   const [houses, setHouses] = useState([]);
-  const [deadline, setDeadline] = useState("");
   const [countdownLabel, setCountdownLabel] = useState("");
   const [deadlinePassed, setDeadlinePassed] = useState(false);
   const [status, setStatus] = useState({ type: "idle", message: "" });
@@ -76,13 +75,12 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
       const now = new Date();
       const nextTarget = getNextFridayDeadlineUTC(now);
       const lastTarget = getLastFridayDeadlineUTC(now);
-      const nextMonday = new Date(lastTarget);
-      nextMonday.setUTCDate(nextMonday.getUTCDate() + 3);
-      nextMonday.setUTCHours(0, 0, 0, 0);
-      const passedWindow = now > lastTarget && now < nextMonday;
+      const reopenTime = new Date(lastTarget);
+      reopenTime.setUTCMinutes(reopenTime.getUTCMinutes() + 50);
+      const passedWindow = now > lastTarget && now < reopenTime;
       setDeadlinePassed(passedWindow);
       setCountdownLabel(
-        passedWindow ? "DEADLINE PASSED" : formatCountdown(nextTarget - now)
+        passedWindow ? "DEADLINE PASSED (reopens at 15:15 GMT)" : formatCountdown(nextTarget - now)
       );
     };
 
@@ -140,19 +138,10 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
           setClasses(classes);
           setHouses(houses);
           if (weekData.deadlineAt) {
-            const when = new Date(weekData.deadlineAt);
-            setDeadline(
-              `Deadline: ${when.toLocaleString("en-US", {
-                weekday: "long",
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "GMT",
-                hour12: false,
-              })} GMT`
-            );
+            // deadlineAt is available for future use (e.g., display or analytics).
           }
         }
-      } catch (error) {
+      } catch {
         if (isMounted) {
           setStatus({ type: "error", message: "Unable to load form data" });
         }

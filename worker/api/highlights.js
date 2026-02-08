@@ -59,7 +59,37 @@ const getWeekStart = (date = getLondonDate()) => {
     )
   );
   monday.setUTCHours(0, 0, 0, 0);
+  const fridayReopen = new Date(monday);
+  fridayReopen.setUTCDate(fridayReopen.getUTCDate() + 4);
+  fridayReopen.setUTCHours(15, 15, 0, 0);
+  if (current >= fridayReopen) {
+    monday.setUTCDate(monday.getUTCDate() + 7);
+  }
   return monday;
+};
+
+const getDeadlineFor = (weekStart) => {
+  const deadline = new Date(weekStart);
+  deadline.setUTCDate(deadline.getUTCDate() + 4);
+  deadline.setUTCHours(14, 25, 0, 0);
+  return deadline;
+};
+
+const ensureWeek = async (db, weekStart) => {
+  const weekStartIso = formatDate(weekStart);
+  const deadlineAt = getDeadlineFor(weekStart).toISOString();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO weeks (week_start, deadline_at)
+       VALUES (?, ?)`
+    )
+    .bind(weekStartIso, deadlineAt)
+    .run();
+  const { results } = await db
+    .prepare(`SELECT id, week_start FROM weeks WHERE week_start = ?`)
+    .bind(weekStartIso)
+    .all();
+  return results?.[0] || null;
 };
 
 const getPeriodRange = async (period, db) => {
@@ -70,7 +100,7 @@ const getPeriodRange = async (period, db) => {
         .all();
       const term = results?.[0];
       if (term?.start_date && term?.end_date) {
-        return { start: term.start_date, end: term.end_date };
+        return { mode: "term", start: term.start_date, end: term.end_date };
       }
     } catch (error) {
       // fall back to week below
@@ -78,14 +108,8 @@ const getPeriodRange = async (period, db) => {
     }
   }
 
-  const weekStart = getWeekStart();
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
-
-  return {
-    start: formatDate(weekStart),
-    end: formatDate(weekEnd),
-  };
+  const week = await ensureWeek(db, getWeekStart());
+  return week ? { mode: "week", weekId: week.id } : { mode: "week", weekId: null };
 };
 
 const ensureSentence = (value) => {
@@ -101,22 +125,31 @@ export async function onRequest({ env, request }) {
     const periodParam = url.searchParams.get("period");
     const period = periodParam === "term" ? "term" : "week";
 
-    const { start, end } = await getPeriodRange(period, env.DB);
-    if (!start || !end) {
+    const range = await getPeriodRange(period, env.DB);
+    if (range.mode === "term" && (!range.start || !range.end)) {
       return json({ text: null });
     }
 
-    const rows = await env.DB.prepare(
-      `SELECT notes
-       FROM point_entries
-       WHERE entry_date BETWEEN ? AND ?
-         AND notes IS NOT NULL
-         AND TRIM(notes) != ''
-       ORDER BY entry_date DESC
-       LIMIT 40`
-    )
-      .bind(start, end)
-      .all();
+    const query =
+      period === "week"
+        ? `SELECT notes
+           FROM point_entries
+           WHERE week_id = ?
+             AND notes IS NOT NULL
+             AND TRIM(notes) != ''
+           ORDER BY entry_date DESC
+           LIMIT 40`
+        : `SELECT notes
+           FROM point_entries
+           WHERE entry_date BETWEEN ? AND ?
+             AND notes IS NOT NULL
+             AND TRIM(notes) != ''
+           ORDER BY entry_date DESC
+           LIMIT 40`;
+    const rows =
+      range.mode === "week"
+        ? await env.DB.prepare(query).bind(range.weekId || -1).all()
+        : await env.DB.prepare(query).bind(range.start, range.end).all();
 
     if (!rows.results?.length) {
       return json({ text: null });
