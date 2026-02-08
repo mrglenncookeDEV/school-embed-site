@@ -118,6 +118,23 @@ body {
   bottom: calc(-1 * var(--kerb-height));
 }
 
+@keyframes modalIn {
+  0% {
+    transform: translateY(64px);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[modalIn_520ms_ease-out\] {
+    animation: none;
+  }
+}
+
 .track-wrapper {
   position: relative;
   width: 100%;

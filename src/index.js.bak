@@ -35,7 +35,7 @@ async function checkSchema(db) {
       return json(
         {
           error:
-            "D1 schema missing (weeks table not found). Apply the migrations before calling /api/* (see docs/d1-setup.md).",
+            `D1 schema missing (weeks table not found). Apply the migrations before calling ${import.meta.env.BASE_URL}api/* (see docs/d1-setup.md).`,
         },
         500
       );
@@ -486,7 +486,7 @@ async function handleApi(request, env, url) {
   const pathname = url.pathname;
   const method = request.method;
 
-  if (pathname === "/api/message" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/message` && method === "GET") {
     return json({ message: "Hello from Worker API" });
   }
 
@@ -495,28 +495,28 @@ async function handleApi(request, env, url) {
     return json({ error: "Database binding not configured" }, 500);
   }
 
-  if (pathname === "/api/houses" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/houses` && method === "GET") {
     const houses = await fetchHouses(db);
     return json({ houses });
   }
 
-  if (pathname === "/api/classes" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/classes` && method === "GET") {
     const classes = await fetchClasses(db);
     return json({ classes });
   }
 
-  if (pathname === "/api/admin/seed" && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/admin/seed` && method === "POST") {
     const housesInserted = await seedDefaultHouses(db);
     const classesInserted = await seedDefaultClasses(db);
     return json({ housesInserted, classesInserted });
   }
 
-  if (pathname === "/api/weeks/current" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/weeks/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     return json(camelizeWeek(week));
   }
 
-  if (pathname === "/api/scoreboard/current" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/scoreboard/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     const scoreboard = await fetchScoreboard(db, week.id);
     const term = await fetchActiveTerm(db);
@@ -547,18 +547,18 @@ async function handleApi(request, env, url) {
     });
   }
 
-  if (pathname === "/api/missing/current" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/missing/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     const classes = await fetchMissingClasses(db, week.id);
     return json({ classes });
   }
 
-  if (pathname === "/api/entries" && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/entries` && method === "POST") {
     const week = await ensureCurrentWeek(db);
     return handleEntriesPost(request, db, week);
   }
 
-  if (pathname === "/api/entries" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/entries` && method === "GET") {
     const weekParam = url.searchParams.get("week");
     if (weekParam !== "current") {
       return json({ error: "Only ?week=current is supported" }, 400);
@@ -568,7 +568,7 @@ async function handleApi(request, env, url) {
     return json({ entries });
   }
 
-  if (pathname.startsWith("/api/entries/") && method === "DELETE") {
+  if (pathname.startsWith(`${import.meta.env.BASE_URL}api/entries/`) && method === "DELETE") {
     const parts = pathname.split("/").filter(Boolean);
     const entryId = Number(parts[2]);
     if (!entryId) {
@@ -577,7 +577,7 @@ async function handleApi(request, env, url) {
     return handleEntryDelete(request, db, entryId);
   }
 
-  if (pathname === "/api/audit" && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/audit` && method === "GET") {
     const limitParam = Number(url.searchParams.get("limit") || 50);
     const limit = Math.min(Math.max(limitParam || 50, 1), 100);
     const audit = await fetchAudit(db, limit);
@@ -592,7 +592,7 @@ export default {
     const url = new URL(request.url);
 
     // 1) API routes: handled by Worker (D1 etc)
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith(`${import.meta.env.BASE_URL}api/`)) {
       if (!env.DB) {
         return json({ error: "Database binding not configured" }, 500);
       }

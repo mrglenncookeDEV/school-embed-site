@@ -1,4 +1,4 @@
-import logo from "/favicon.png";
+const logo = `${import.meta.env.BASE_URL}favicon.png`;
 import { renderWaffleImage } from "./renderWaffleImage";
 let pptxLoader = null;
 

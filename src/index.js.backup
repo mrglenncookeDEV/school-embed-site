@@ -40,7 +40,7 @@ async function checkSchema(db) {
       return json(
         {
           error:
-            `D1 schema missing (weeks table not found). Apply the migrations before calling /api/* (see docs/d1-setup.md).`,
+            `D1 schema missing (weeks table not found). Apply the migrations before calling ${import.meta.env.BASE_URL}api/* (see docs/d1-setup.md).`,
         },
         500
       );
@@ -940,7 +940,7 @@ async function handleApi(request, env, url) {
   const pathname = url.pathname;
   const method = request.method;
 
-  if (pathname === `/api/message` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/message` && method === "GET") {
     return json({ message: "Hello from Worker API" });
   }
 
@@ -949,16 +949,16 @@ async function handleApi(request, env, url) {
     return json({ error: "Database binding not configured" }, 500);
   }
 
-  if (pathname === `/api/houses` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/houses` && method === "GET") {
     const houses = await fetchHouses(db);
     return json({ houses });
   }
 
-  if (pathname === `/api/houses` && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/houses` && method === "POST") {
     return handleHousesPost(request, db);
   }
 
-  if (pathname.startsWith(`/api/houses/`) && (method === "PUT" || method === "DELETE")) {
+  if (pathname.startsWith(`${import.meta.env.BASE_URL}api/houses/`) && (method === "PUT" || method === "DELETE")) {
     const parts = pathname.split("/").filter(Boolean);
     const houseId = Number(parts[2]);
     if (!houseId) {
@@ -972,16 +972,16 @@ async function handleApi(request, env, url) {
     }
   }
 
-  if (pathname === `/api/classes` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/classes` && method === "GET") {
     const classes = await fetchClasses(db);
     return json({ classes });
   }
 
-  if (pathname === `/api/classes` && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/classes` && method === "POST") {
     return handleClassesPost(request, db);
   }
 
-  if (pathname.startsWith(`/api/classes/`) && (method === "PUT" || method === "DELETE")) {
+  if (pathname.startsWith(`${import.meta.env.BASE_URL}api/classes/`) && (method === "PUT" || method === "DELETE")) {
     const parts = pathname.split("/").filter(Boolean);
     const classId = Number(parts[2]);
     if (!classId) {
@@ -995,22 +995,22 @@ async function handleApi(request, env, url) {
     }
   }
 
-  if (pathname === `/api/admin/seed` && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/admin/seed` && method === "POST") {
     const housesInserted = await seedDefaultHouses(db);
     const classesInserted = await seedDefaultClasses(db);
     return json({ housesInserted, classesInserted });
   }
 
-  if (pathname === `/api/terms` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/terms` && method === "GET") {
     const terms = await fetchTerms(db);
     return json({ terms });
   }
 
-  if (pathname === `/api/terms` && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/terms` && method === "POST") {
     return handleTermsPost(request, db);
   }
 
-  if (pathname.startsWith(`/api/terms/`) && (method === "PUT" || method === "DELETE")) {
+  if (pathname.startsWith(`${import.meta.env.BASE_URL}api/terms/`) && (method === "PUT" || method === "DELETE")) {
     const parts = pathname.split("/").filter(Boolean);
     const termId = Number(parts[2]);
     if (!termId) {
@@ -1024,12 +1024,12 @@ async function handleApi(request, env, url) {
     }
   }
 
-  if (pathname === `/api/weeks/current` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/weeks/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     return json(camelizeWeek(week));
   }
 
-  if (pathname === `/api/scoreboard/current` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/scoreboard/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     const scoreboard = await fetchScoreboard(db, week.id);
     const term = await fetchActiveTerm(db);
@@ -1060,18 +1060,18 @@ async function handleApi(request, env, url) {
     });
   }
 
-  if (pathname === `/api/missing/current` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/missing/current` && method === "GET") {
     const week = await ensureCurrentWeek(db);
     const classes = await fetchMissingClasses(db, week.id);
     return json({ classes });
   }
 
-  if (pathname === `/api/entries` && method === "POST") {
+  if (pathname === `${import.meta.env.BASE_URL}api/entries` && method === "POST") {
     const week = await ensureCurrentWeek(db);
     return handleEntriesPost(request, db, week);
   }
 
-  if (pathname === `/api/entries` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/entries` && method === "GET") {
     const weekParam = url.searchParams.get("week");
     const termParam = url.searchParams.get("term");
 
@@ -1100,7 +1100,7 @@ async function handleApi(request, env, url) {
     return json({ entries });
   }
 
-  if (pathname.startsWith(`/api/entries/`) && method === "DELETE") {
+  if (pathname.startsWith(`${import.meta.env.BASE_URL}api/entries/`) && method === "DELETE") {
     const parts = pathname.split("/").filter(Boolean);
     const entryId = Number(parts[2]);
     if (!entryId) {
@@ -1109,26 +1109,26 @@ async function handleApi(request, env, url) {
     return handleEntryDelete(request, db, entryId);
   }
 
-  if (pathname === `/api/audit` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/audit` && method === "GET") {
     const limitParam = Number(url.searchParams.get("limit") || 50);
     const limit = Math.min(Math.max(limitParam || 50, 1), 100);
     const audit = await fetchAudit(db, limit);
     return json({ audit });
   }
 
-  if (pathname === `/api/highlights` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/highlights` && method === "GET") {
     return highlights({ env, request });
   }
 
-  if (pathname === `/api/values-breakdown` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/values-breakdown` && method === "GET") {
     return valuesBreakdown({ env, request });
   }
 
-  if (pathname === `/api/values-by-class` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/values-by-class` && method === "GET") {
     return valuesByClass({ env, request });
   }
 
-  if (pathname === `/api/values-captions` && method === "GET") {
+  if (pathname === `${import.meta.env.BASE_URL}api/values-captions` && method === "GET") {
     return valuesCaptions({ env, request });
   }
 
@@ -1141,124 +1141,55 @@ async function handleApi(request, env, url) {
 
 export default {
   async fetch(request, env, ctx) {
-    const originalUrl = new URL(request.url);
-
-    // OLD workers.dev domain → show moved message
-    if (originalUrl.hostname.endsWith(".workers.dev")) {
-      return new Response(
-        `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Site moved</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f8fafc;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .card {
-      background: white;
-      padding: 32px;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.08);
-      text-align: center;
-    }
-    a {
-      display: inline-block;
-      margin-top: 16px;
-      padding: 10px 18px;
-      background: #2563eb;
-      color: white;
-      border-radius: 6px;
-      text-decoration: none;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>This site has moved</h2>
-    <p>Please use the new address:</p>
-    <a href="https://folville.co.uk/houses/">Open Folville Houses</a>
-  </div>
-</body>
-</html>
-`,
-        { headers: { "content-type": "text/html" } }
-      );
-    }
-
-    // Normalize /houses → /houses/
-    if (originalUrl.pathname === "/houses") {
-      return Response.redirect(originalUrl.origin + "/houses/", 301);
-    }
-
-    let pathname = originalUrl.pathname;
-
-    // Strip /houses prefix
-    if (pathname.startsWith("/houses")) {
-      pathname = pathname.replace(/^\/houses/, "") || "/";
-    }
-
     const url = new URL(request.url);
-    url.pathname = pathname;
 
-    // API ROUTES
-    if (pathname.startsWith("/api/")) {
+    // Normalize /houses mount
+    if (url.pathname.startsWith("/houses")) {
+      url.pathname = url.pathname.replace(/^\/houses/, "") || "/";
+    }
+
+    // 1) API routes
+    if (url.pathname.startsWith(`${import.meta.env.BASE_URL}api/`)) {
       if (!env.DB) {
-        return new Response("DB missing", { status: 500 });
+        return json({ error: "Database binding not configured" }, 500);
       }
 
-      const apiRequest = new Request(url.toString(), {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-      });
+      const schemaResponse = await checkSchema(env.DB);
+      if (schemaResponse) {
+        return schemaResponse;
+      }
 
-try {
-  return await handleApi(apiRequest, env, url);
-} catch (err) {
-  return new Response(
-    JSON.stringify({
-      workerError: true,
-      message: err?.message,
-      stack: err?.stack,
-    }),
-    {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    }
-  );
-}    }
-
-    // STATIC ASSETS + SPA FALLBACK
-    if (!env.ASSETS) {
-      return new Response("Assets missing", { status: 500 });
+      try {
+        return await handleApi(
+          new Request(url.toString(), {
+            method: request.method,
+            headers: request.headers,
+            body: request.body,
+          }),
+          env,
+          url
+        );
+      } catch (error) {
+        return json({ error: error.message ?? "Internal error" }, 500);
+      }
     }
 
-    const assetRequest = new Request(url.toString(), request);
-    const assetResponse = await env.ASSETS.fetch(assetRequest);
+    // 2) Static assets + SPA fallback
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response("Assets binding not configured.", { status: 500 });
+    }
+
+    const assetResponse = await env.ASSETS.fetch(new Request(url.toString(), request));
 
     if (assetResponse.status !== 404) {
       return assetResponse;
     }
 
-    // SPA fallback for ANY frontend route
     const accept = request.headers.get("accept");
     if (accept && accept.includes("text/html")) {
       const indexUrl = new URL(request.url);
       indexUrl.pathname = "/houses/index.html";
-      const houseIndex = await env.ASSETS.fetch(indexUrl.toString());
-      if (houseIndex.status !== 404) {
-        return houseIndex;
-      }
-      indexUrl.pathname = "/index.html";
-      return env.ASSETS.fetch(indexUrl.toString());
+      return env.ASSETS.fetch(new Request(indexUrl, request));
     }
 
     return assetResponse;

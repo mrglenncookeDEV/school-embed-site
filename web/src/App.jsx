@@ -1,16 +1,22 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserRouter as Router, NavLink, Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
-import Admin from "./pages/Admin";
-import EmbedScoreboard from "./pages/EmbedScoreboard";
-import Scoreboard from "./pages/Scoreboard";
-import TeacherSubmit from "./pages/TeacherSubmit";
-import TestHouses from "./pages/TestHouses";
-import { Presentation, Printer, Camera, User, Shield, ChevronDown } from "lucide-react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrowserRouter as Router, NavLink, Route, Routes, useLocation, Navigate } from "react-router-dom";
+import { Presentation, Printer, Send, UserStar, Shield, ChevronDown, ChartPie } from "lucide-react";
 
 const PLAYFUL_FONT = '"Permanent Marker", "Marker Felt", "Kalam", cursive';
 
+const Admin = lazy(() => import("./pages/Admin"));
+const EmbedScoreboard = lazy(() => import("./pages/EmbedScoreboard"));
+const Scoreboard = lazy(() => import("./pages/Scoreboard"));
+const TeacherSubmit = lazy(() => import("./pages/TeacherSubmit"));
+const TestHouses = lazy(() => import("./pages/TestHouses"));
+
 function SlideUpModal({ open, onClose, children }) {
+  const [modalHeight, setModalHeight] = useState(92);
+  const resizingRef = useRef(false);
+  const startHeightRef = useRef(modalHeight);
+  const startYRef = useRef(0);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -29,31 +35,57 @@ function SlideUpModal({ open, onClose, children }) {
     };
   }, [open, onClose]);
 
+  const handleResizeStart = (event) => {
+    if (event.button !== 0 && event.pointerType !== "touch") return;
+    resizingRef.current = true;
+    startYRef.current = event.clientY;
+    startHeightRef.current = modalHeight;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleResizeMove = (event) => {
+    if (!resizingRef.current) return;
+    const delta = startYRef.current - event.clientY;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const deltaVh = (delta / viewportHeight) * 100;
+    const next = Math.min(94, Math.max(58, startHeightRef.current + deltaVh));
+    setModalHeight(next);
+  };
+
+  const handleResizeEnd = (event) => {
+    if (!resizingRef.current) return;
+    resizingRef.current = false;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   if (!open) {
     return null;
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="absolute inset-0 bg-black/50 transition-opacity" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-end justify-center pb-[env(safe-area-inset-bottom)]">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={onClose} />
       <div
-        className="relative z-10 flex w-[95vw] max-w-[960px] flex-col items-stretch rounded-t-[32px] bg-white shadow-2xl sm:w-[75vw]"
-        style={{ height: "87.5vh" }}
+        className="relative z-10 flex w-[95vw] max-w-[720px] flex-col items-stretch rounded-t-[32px] bg-[#1f2aa6] shadow-2xl sm:w-[60vw] transition-transform duration-500 ease-out animate-[modalIn_520ms_ease-out]"
+        style={{
+          height: `min(${modalHeight}dvh, ${modalHeight}vh)`,
+          maxHeight: "calc(100dvh - env(safe-area-inset-top))",
+        }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-            Submit points
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 transition hover:bg-slate-50"
-          >
-            Close
-          </button>
+        <div
+          className="flex items-center justify-center pt-2"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+        >
+          <div
+            className="h-1.5 w-12 rounded-full bg-white/70 shadow-[inset_0_-1px_2px_rgba(0,0,0,0.25)] cursor-ns-resize"
+            aria-hidden="true"
+          />
         </div>
-        <div className="flex h-full overflow-y-auto p-4 sm:p-6">{children}</div>
+        <div className="flex h-full overflow-y-auto p-3 pb-0 sm:p-4 sm:pb-0">{children}</div>
       </div>
     </div>,
     document.body
@@ -133,11 +165,9 @@ function AppContent() {
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerRef = useRef(null);
   const isEmbedRoute = location.pathname.startsWith("/embed/");
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : "";
   // Worker host for reports (prefer env; otherwise use current origin).
   const STAFF_SECRET =
     (import.meta.env.VITE_STAFF_REPORT_SECRET || "s3cret-8d7f2e3e-62c8-4f7a-9c6f-9f3d4b96a8f2").trim();
@@ -157,6 +187,25 @@ function AppContent() {
     reportsAvailable
       ? `${REPORTS_BASE}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${STAFF_SECRET}`
       : "";
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname]);
+  useEffect(() => {
+    if (isEmbedRoute) return;
+    const node = headerRef.current;
+    if (!node) return;
+    const update = () => setHeaderHeight(node.offsetHeight || 0);
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(update);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [isEmbedRoute]);
   const staffReportUrlFallback = (audience = "staff") =>
     `${REPORTS_BASE_FALLBACK}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${STAFF_SECRET}`;
   const staffReportUrlDeployed = (audience = "staff") =>
@@ -165,17 +214,22 @@ function AppContent() {
     setEditingEntry(entry);
     setTeacherModalOpen(true);
   }, []);
-  const navigate = useNavigate();
   const closeTeacherSubmit = useCallback(() => {
     setTeacherModalOpen(false);
     setEditingEntry(null);
   }, []);
 
   const navItems = [
-    { label: "Scoreboard", to: "/scoreboard", end: true },
-    { label: "Submit Points", action: () => openTeacherSubmit(null) },
-    { label: "Admin", to: "/admin" },
+    { label: "Scoreboard", to: "/scoreboard", end: true, icon: Presentation },
+    { label: "Submit Points", action: () => openTeacherSubmit(null), icon: Send },
+    { label: "Admin", to: "/admin", icon: UserStar },
   ];
+
+  // Common styles for the pill buttons to ensure perfect equality and Apple/Android look
+  const pillBaseClass =
+    "flex w-full items-center justify-center gap-2 rounded-full bg-slate-100 px-4 py-3 shadow-sm transition-all hover:scale-[1.02] hover:bg-slate-200 hover:shadow-md active:scale-95";
+  const pillTextClass = "text-xs font-bold tracking-wide uppercase text-slate-700 whitespace-nowrap";
+
   useEffect(() => {
     const handleClick = () => setReportsOpen(false);
     window.addEventListener("click", handleClick);
@@ -203,71 +257,52 @@ function AppContent() {
   return (
     <div className={isEmbedRoute ? "min-h-screen bg-white" : "min-h-screen bg-slate-50 text-slate-900"}>
       {!isEmbedRoute && (
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-4 shadow-sm backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+        <header
+          ref={headerRef}
+          className="fixed top-0 left-0 right-0 z-10 border-b border-slate-200 bg-[#1f2aa6] px-6 py-4 shadow-sm backdrop-blur"
+        >
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
               <img
-                src="/favicon.png"
+                src={`${import.meta.env.BASE_URL}favicon.png`}
                 alt="House Points logo"
                 className="h-[120px] w-[120px] object-cover"
                 loading="lazy"
               />
-              <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-slate-500 whitespace-nowrap">
+              <div className="min-w-0">
+                <p className="text-sm uppercase tracking-[0.2em] text-white whitespace-nowrap">
                   Weekly Competition
                 </p>
                 <p
-                  className="text-2xl font-semibold text-slate-900 whitespace-nowrap flex items-center gap-0"
+                  className="text-2xl font-semibold text-white whitespace-nowrap flex items-center gap-0"
                   style={{ fontFamily: PLAYFUL_FONT }}
                 >
                   <span className="text-sky-500 text-4xl" aria-hidden="true">
                     🏠
                   </span>{" "}
-                  <span
-                    className="highlight-title text-2xl font-semibold text-[#4169e1] whitespace-nowrap"
-                  >
+                  <span className="text-2xl font-semibold text-white whitespace-nowrap">
                     House Points
                   </span>
                 </p>
               </div>
             </div>
 
-            <nav className="flex flex-wrap items-center gap-3 text-sm font-medium sm:flex-nowrap">
-              <div
-                className="relative"
-                onClick={(event) => event.stopPropagation()}
-                onMouseEnter={() => setReportsOpen(true)}
-                onMouseLeave={() => setReportsOpen(false)}
-              >
-                <button
-                  type="button"
-                  onMouseEnter={() => setReportsOpen(true)}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900 flex items-center gap-1"
-                >
-                  Reports
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-                {reportsOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50">
-                      In Development...
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* Navigation: Grid 2 cols on mobile, 4 cols on sm+ */}
+            <nav className="grid w-full grid-cols-2 gap-2 mt-4 sm:mt-0 sm:w-auto sm:ml-auto sm:grid-cols-4">
               {navItems.map((item) => {
+                const Icon = item.icon;
                 if (item.action) {
                   return (
                     <button
                       key={item.label}
                       type="button"
                       onClick={item.action}
-                      className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                      className={pillBaseClass}
                     >
-                      {item.label}
+                      <Icon className="w-4 h-4 text-slate-800" />
+                      <span className={pillTextClass}>
+                        {item.label}
+                      </span>
                     </button>
                   );
                 }
@@ -277,16 +312,44 @@ function AppContent() {
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `rounded-lg px-3 py-2 transition ${isActive
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-600 hover:text-slate-900"
-                      }`
+                      `${pillBaseClass} ${isActive ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-[#1f2aa6]" : ""}`
                     }
                   >
-                    {item.label}
+                    <Icon className="w-4 h-4 text-slate-800" />
+                    <span className={pillTextClass}>
+                      {item.label}
+                    </span>
                   </NavLink>
                 );
               })}
+
+              <div
+                className="relative"
+                onClick={(event) => event.stopPropagation()}
+                onMouseEnter={() => setReportsOpen(true)}
+                onMouseLeave={() => setReportsOpen(false)}
+              >
+                <button
+                  type="button"
+                  onMouseEnter={() => setReportsOpen(true)}
+                  className={pillBaseClass}
+                >
+                  <ChartPie className="w-4 h-4 text-slate-800" />
+                  <span className={pillTextClass}>
+                    Reports
+                  </span>
+                </button>
+                {reportsOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg z-20"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50 rounded-xl">
+                      In Development...
+                    </div>
+                  </div>
+                )}
+              </div>
             </nav>
           </div>
         </header>
@@ -296,78 +359,92 @@ function AppContent() {
         className={
           isEmbedRoute
             ? "min-h-screen"
-            : "mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8"
+            : "mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-6 sm:px-6 lg:px-8"
+        }
+        style={
+          isEmbedRoute
+            ? undefined
+            : {
+                paddingTop: `calc(${headerHeight}px + 16px)`,
+                scrollPaddingTop: `${headerHeight + 16}px`,
+              }
         }
       >
-        <Routes>
-          {/* Explicit pages */}
-          <Route path="/" element={<Navigate to="/scoreboard" replace />} />
-          <Route path="/scoreboard" element={<Scoreboard />} />
-          <Route path="/teacher" element={<Scoreboard />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/embed/scoreboard" element={<EmbedScoreboard />} />
-          <Route path="/test-houses" element={<TestHouses />} />
+        <Suspense fallback={<div className="text-sm text-slate-600">Loading…</div>}>
+          <Routes>
+            {/* Explicit pages */}
+            <Route path="/" element={<Navigate to="/scoreboard" replace />} />
+            <Route path="/scoreboard" element={<Scoreboard />} />
+            <Route path="/teacher" element={<Scoreboard />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/embed/scoreboard" element={<EmbedScoreboard />} />
+            <Route path="/test-houses" element={<TestHouses />} />
 
-          {/* Reports */}
-          <Route
-            path="/reports/staff"
-            element={
-              <ReportViewer
-                url={staffReportUrl("staff")}
-                fallbackUrl={staffReportUrlFallback("staff")}
-                extraUrls={[staffReportUrlDeployed("staff")]}
-                title="Staff / Ofsted values report"
-              />
-            }
-          />
-          <Route
-            path="/reports/parents"
-            element={
-              <ReportViewer
-                url={staffReportUrl("parents")}
-                fallbackUrl={staffReportUrlFallback("parents")}
-                extraUrls={[staffReportUrlDeployed("parents")]}
-                title="Parent-safe values report"
-              />
-            }
-          />
-          <Route
-            path="/reports/weekly-pdf"
-            element={
-              <ReportViewer
-                url={`${staffReportUrl("staff")}&format=pdf`}
-                fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf`}
-                extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf`]}
-                title="Weekly PDF (staff)"
-              />
-            }
-          />
-          <Route
-            path="/reports/print-pdf"
-            element={
-              <ReportViewer
-                url={`${staffReportUrl("staff")}&format=pdf&monochrome=true`}
-                fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf&monochrome=true`}
-                extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf&monochrome=true`]}
-                title="Print-friendly PDF"
-              />
-            }
-          />
+            {/* Reports */}
+            <Route
+              path="/reports/staff"
+              element={
+                <ReportViewer
+                  url={staffReportUrl("staff")}
+                  fallbackUrl={staffReportUrlFallback("staff")}
+                  extraUrls={[staffReportUrlDeployed("staff")]}
+                  title="Staff / Ofsted values report"
+                />
+              }
+            />
+            <Route
+              path="/reports/parents"
+              element={
+                <ReportViewer
+                  url={staffReportUrl("parents")}
+                  fallbackUrl={staffReportUrlFallback("parents")}
+                  extraUrls={[staffReportUrlDeployed("parents")]}
+                  title="Parent-safe values report"
+                />
+              }
+            />
+            <Route
+              path="/reports/weekly-pdf"
+              element={
+                <ReportViewer
+                  url={`${staffReportUrl("staff")}&format=pdf`}
+                  fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf`}
+                  extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf`]}
+                  title="Weekly PDF (staff)"
+                />
+              }
+            />
+            <Route
+              path="/reports/print-pdf"
+              element={
+                <ReportViewer
+                  url={`${staffReportUrl("staff")}&format=pdf&monochrome=true`}
+                  fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf&monochrome=true`}
+                  extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf&monochrome=true`]}
+                  title="Print-friendly PDF"
+                />
+              }
+            />
 
-          {/* 404 — inert */}
-          <Route path="*" element={<div />} />
-        </Routes>
+            {/* 404 — inert */}
+            <Route path="*" element={<div />} />
+          </Routes>
+        </Suspense>
       </main>
-      <SlideUpModal open={isTeacherModalOpen} onClose={closeTeacherSubmit}>
-        <TeacherSubmit entry={editingEntry} onSuccess={closeTeacherSubmit} />
-      </SlideUpModal>
+      {isTeacherModalOpen && (
+        <SlideUpModal open={isTeacherModalOpen} onClose={closeTeacherSubmit}>
+          <Suspense fallback={<div className="text-sm text-slate-600">Loading form…</div>}>
+            <TeacherSubmit entry={editingEntry} onSuccess={closeTeacherSubmit} onClose={closeTeacherSubmit} />
+          </Suspense>
+        </SlideUpModal>
+      )}
     </div>
   );
 }
 
 export default function App() {
   return (
-    <Router>
+    <Router basename={import.meta.env.BASE_URL}>
       <AppContent />
     </Router>
   );

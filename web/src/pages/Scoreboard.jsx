@@ -302,11 +302,11 @@ function ProgressTrack({
   const getFinishDeadline = () => {
     if (timePillType === "weekday") {
       const d = new Date();
-      const day = d.getDay();
+      const day = d.getUTCDay();
       const diffToFriday = (5 - day + 7) % 7;
       const friday = new Date(d);
-      friday.setDate(d.getDate() + diffToFriday);
-      friday.setHours(12, 0, 0, 0);
+      friday.setUTCDate(d.getUTCDate() + diffToFriday);
+      friday.setUTCHours(14, 25, 0, 0);
       return friday;
     }
 
@@ -1222,8 +1222,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       }
       try {
         const [scoreRes, entriesRes] = await Promise.all([
-          fetch("/api/scoreboard/current"),
-          fetch("/api/entries?week=current")
+          fetch(`${import.meta.env.BASE_URL}api/scoreboard/current`),
+          fetch(`${import.meta.env.BASE_URL}api/entries?week=current`)
         ]);
 
         const payload = await scoreRes.json();
@@ -1259,7 +1259,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
     const loadClasses = async () => {
       try {
         setClassesLoading(true);
-        const res = await fetch("/api/classes");
+        const res = await fetch(`${import.meta.env.BASE_URL}api/classes`);
         const payload = await res.json();
         if (res.ok) {
           setClassesList(payload.classes || []);
@@ -1292,8 +1292,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       setSubmissionsLoading(true);
       try {
         const endpoint = activeSlide === 0
-          ? "/api/entries?week=current"
-          : "/api/entries?term=current";
+          ? `${import.meta.env.BASE_URL}api/entries?week=current`
+          : `${import.meta.env.BASE_URL}api/entries?term=current`;
 
         const response = await fetch(endpoint);
         const payload = await response.json();
@@ -1330,7 +1330,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
     let isMounted = true;
 
-    fetch(`/api/highlights?period=${currentPeriod}`)
+    fetch(`${import.meta.env.BASE_URL}api/highlights?period=${currentPeriod}`)
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
@@ -1356,7 +1356,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
     let isMounted = true;
     setValuesLoading(true);
 
-    fetch(`/api/values-breakdown?period=${currentPeriod}`)
+    fetch(`${import.meta.env.BASE_URL}api/values-breakdown?period=${currentPeriod}`)
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
@@ -1384,7 +1384,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
   }, [currentPeriod]);
 
   useEffect(() => {
-    fetch(`/api/values-captions?period=${currentPeriod}`)
+    fetch(`${import.meta.env.BASE_URL}api/values-captions?period=${currentPeriod}`)
       .then((res) => res.json())
       .then((data) =>
         setValueCaptions({
@@ -1399,7 +1399,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
     let isMounted = true;
     setClassValuesLoading(true);
 
-    fetch(`/api/values-by-class?period=${currentPeriod}`)
+    fetch(`${import.meta.env.BASE_URL}api/values-by-class?period=${currentPeriod}`)
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
@@ -2234,11 +2234,12 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
               {/* Weekly Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 shadow-2xl ring-1 ring-white/30 mx-3"
+                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/30 ring-1 ring-black/20 mx-1"
                   style={{
                     background: `linear-gradient(135deg, ${WEEK_TITLE_COLOR}, #0f172a)`,
                     padding: "28px",
-                    boxShadow: "0 20px 55px rgba(15, 23, 42, 0.40)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -8px 16px rgba(0,0,0,0.25)",
                   }}
                 >
                   <h2
@@ -2251,7 +2252,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     {thisWeekTotal} pts
                   </p>
                   <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
-                    Keep adding points before Friday noon.
+                    Keep adding points before Friday 14:25 GMT.
                   </p>
                   <p className="text-xs text-slate-200 mt-1 leading-tight truncate">
                     {weekSummaryLine}
@@ -2278,9 +2279,10 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     <p className="text-sm font-semibold text-slate-700">{weekRangeLabel}</p>
                   )}
                 </div>
-                <div
-                  ref={chartRef}
-                  className="w-full"
+                <ChartGuard
+                  name="week-main"
+                  forwardedRef={chartRef}
+                  className="w-full min-h-[320px]"
                   style={{ height: "400px" }}
                 >
                   {loading ? (
@@ -2289,7 +2291,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     <p className="text-sm text-rose-600">{error}</p>
                   ) : (
                     <div className="h-full">
-                      <ResponsiveContainer ref={weekChartRef} width="100%" height="100%">
+                      <ResponsiveContainer ref={weekChartRef} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={weekRows}
                         margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
@@ -2335,7 +2337,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                       </ResponsiveContainer>
                     </div>
                   )}
-                </div>
+                </ChartGuard>
                 <div className="mt-4 space-y-2">
                   <button
                     type="button"
@@ -2360,8 +2362,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 </div>
 
                 {showWeekYearBars && (
-                  <div className="mt-3 h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ChartGuard name="week-year" className="mt-3 h-72 min-h-[240px]">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart
                       data={yearGroupTotals}
                       margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
@@ -2387,12 +2389,12 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                       />
                     </BarChart>
                   </ResponsiveContainer>
-                  </div>
+                  </ChartGuard>
                 )}
 
                 {showWeekClassBars && (
-                  <div className="mt-3 h-72">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <ChartGuard name="week-class" className="mt-3 h-72 min-h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart
                       data={classTotals}
                       margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
@@ -2422,7 +2424,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                       />
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartGuard>
                 )}
               </div>
 
@@ -2436,7 +2438,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     placeholderText="Week data unavailable"
                     highlightHouseKeys={tiedHouseKeys}
                     timePillType="weekday"
-                    finishLabel="Finish · Friday 12:00"
+                    finishLabel="Finish · Friday 14:25 GMT"
                     timePillPrimaryColor={leadingHouseColor}
                     timePillTieColors={tieHouseColors}
                     footer={weekLeadingHouseFooter}
@@ -2455,11 +2457,12 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
               {/* Term Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 shadow-2xl ring-1 ring-white/30 mx-3"
+                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/30 ring-1 ring-black/20 mx-1"
                   style={{
                     background: "linear-gradient(135deg, #dc2626, #111827)",
                     padding: "28px",
-                    boxShadow: "0 20px 55px rgba(15, 23, 42, 0.40)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -8px 16px rgba(0,0,0,0.25)",
                   }}
                 >
                   <h2
@@ -2505,8 +2508,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     No active term
                   </div>
                 ) : (
-                  <div className="w-full" style={{ height: "400px" }}>
-                    <ResponsiveContainer ref={termChartRef} width="100%" height="100%">
+                  <ChartGuard name="term-main" className="w-full min-h-[320px]" style={{ height: "400px" }}>
+                    <ResponsiveContainer ref={termChartRef} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={termRows}
                         margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
@@ -2550,7 +2553,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartGuard>
                 )}
                 <div className="mt-4">
                   <button
@@ -2566,8 +2569,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 </div>
 
               {showTermYearBars && (
-                <div className="mt-3 h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                <ChartGuard name="term-year" className="mt-3 h-72 min-h-[240px]">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart
                       data={yearGroupTotals}
                       margin={{ top: 10, right: 10, left: 10, bottom: 60 }}
@@ -2593,7 +2596,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                         />
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </ChartGuard>
               )}
                 <div className="mt-4">
                   <button
@@ -2609,8 +2612,8 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 </div>
 
                 {showTermClassBars && (
-                  <div className="mt-3 h-72">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <ChartGuard name="term-class" className="mt-3 h-72 min-h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={classTotals}
                         margin={{ top: 10, right: 10, left: 10, bottom: 80 }}
@@ -2640,7 +2643,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                       />
                       </BarChart>
                     </ResponsiveContainer>
-                  </div>
+                  </ChartGuard>
                 )}
               </div>
 
@@ -2701,7 +2704,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
       {!valuesLoading && (
         <div ref={valuesRef} className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
-        <div className="absolute right-6 top-6 flex gap-2 no-export z-10">
+        <div className="absolute right-6 top-6 flex gap-2 no-export z-[5]">
           <button
             type="button"
             disabled={exporting.slides}
@@ -3085,4 +3088,40 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
 export default function ScoreboardPage() {
   return <ScoreboardContent />;
+}
+function ChartGuard({ name, className, style, children, forwardedRef }) {
+  const localRef = useRef(null);
+  const containerRef = forwardedRef ?? localRef;
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      const ok = rect.width > 0 && rect.height > 0;
+      if (!ok) {
+        // Debug only: helps identify which chart container is still 0-sized.
+        console.warn(`[ChartGuard] ${name ?? "chart"} has zero size`, {
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+      setReady(ok);
+    };
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(update);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [containerRef]);
+
+  return (
+    <div ref={containerRef} className={className} style={style}>
+      {ready ? children : <p className="text-sm text-slate-500">Loading chart…</p>}
+    </div>
+  );
 }

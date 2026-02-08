@@ -169,7 +169,7 @@ export default function Admin() {
     setLoadingEntries(true);
     setError("");
     try {
-      const response = await fetch(`/api/entries?week=${rangeToQuery(range)}`);
+      const response = await fetch(`${import.meta.env.BASE_URL}api/entries?week=${rangeToQuery(range)}`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load entries");
@@ -186,7 +186,7 @@ export default function Admin() {
   const loadClasses = async () => {
     setLoadingClasses(true);
     try {
-      const response = await fetch("/api/classes");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/classes`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load classes");
@@ -202,7 +202,7 @@ export default function Admin() {
   const loadHouses = async () => {
     setLoadingHouses(true);
     try {
-      const response = await fetch("/api/houses");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/houses`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load houses");
@@ -219,7 +219,7 @@ export default function Admin() {
     setMissingLoading(true);
     setMissingError("");
     try {
-      const response = await fetch("/api/missing/current");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/missing/current`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load missing submissions");
@@ -235,7 +235,7 @@ export default function Admin() {
   const loadTerms = async () => {
     setLoadingTerms(true);
     try {
-      const response = await fetch("/api/terms");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/terms`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load terms");
@@ -251,7 +251,7 @@ export default function Admin() {
   const loadAudit = async () => {
     setLoadingAudit(true);
     try {
-      const response = await fetch("/api/audit?limit=50");
+      const response = await fetch(`${import.meta.env.BASE_URL}api/audit?limit=50`);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load audit log");
@@ -281,7 +281,7 @@ export default function Admin() {
   const handleDelete = async (id) => {
     setDeletingId(id);
     try {
-      const response = await fetch(`/api/entries/${id}?actorEmail=admin@school.local`, {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/entries/${id}?actorEmail=admin@school.local`, {
         method: "DELETE",
       });
       const payload = await response.json();
@@ -344,7 +344,7 @@ export default function Admin() {
     if (!window.confirm("Final warning: this action cannot be undone. Proceed?")) return;
     setBulkDeleting(true);
     try {
-      const res = await fetch("/api/entries/bulk-delete", {
+      const res = await fetch(`${import.meta.env.BASE_URL}api/entries/bulk-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope, actorEmail: "admin@school.local" }),
@@ -378,7 +378,7 @@ export default function Admin() {
     setIsSavingClass(true);
     setError("");
     try {
-      const url = editingClass ? `/api/classes/${editingClass.id}` : "/api/classes";
+      const url = editingClass ? `${import.meta.env.BASE_URL}api/classes/${editingClass.id}` : `${import.meta.env.BASE_URL}api/classes`;
       const method = editingClass ? "PUT" : "POST";
       const response = await fetch(url, {
         method,
@@ -412,7 +412,7 @@ export default function Admin() {
   const handleDeleteClass = async (id) => {
     setError("");
     try {
-      const response = await fetch(`/api/classes/${id}`, {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/classes/${id}`, {
         method: "DELETE",
       });
       const payload = await response.json();
@@ -458,7 +458,7 @@ export default function Admin() {
     setIsSavingHouse(true);
     setError("");
     try {
-      const url = editingHouse ? `/api/houses/${editingHouse.id}` : "/api/houses";
+      const url = editingHouse ? `${import.meta.env.BASE_URL}api/houses/${editingHouse.id}` : `${import.meta.env.BASE_URL}api/houses`;
       const method = editingHouse ? "PUT" : "POST";
       const response = await fetch(url, {
         method,
@@ -485,7 +485,7 @@ export default function Admin() {
   const handleDeleteHouse = async (id) => {
     setError("");
     try {
-      const response = await fetch(`/api/houses/${id}`, {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/houses/${id}`, {
         method: "DELETE",
       });
       const payload = await response.json();
@@ -525,7 +525,7 @@ export default function Admin() {
     setIsSavingTerm(true);
     setError("");
     try {
-      const url = editingTerm ? `/api/terms/${editingTerm.id}` : "/api/terms";
+      const url = editingTerm ? `${import.meta.env.BASE_URL}api/terms/${editingTerm.id}` : `${import.meta.env.BASE_URL}api/terms`;
       const method = editingTerm ? "PUT" : "POST";
       const response = await fetch(url, {
         method,
@@ -552,7 +552,7 @@ export default function Admin() {
   const handleDeleteTerm = async (id) => {
     setError("");
     try {
-      const response = await fetch(`/api/terms/${id}`, { method: "DELETE" });
+      const response = await fetch(`${import.meta.env.BASE_URL}api/terms/${id}`, { method: "DELETE" });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Unable to delete term");
@@ -625,7 +625,7 @@ export default function Admin() {
     const bodyLines = [
       "Hi there,",
       "",
-      "Friendly reminder to submit your house points before Friday noon.",
+      "Friendly reminder to submit your house points before Friday 14:25 GMT.",
       "",
       "Classes still outstanding:",
       ...missingClasses.map(
