@@ -360,7 +360,7 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
             <label className="space-y-1 text-sm font-semibold text-slate-700">
               Notes
               <textarea
-                rows="11"
+                rows="8"
                 value={form.notes}
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
                 disabled={formDisabled}
