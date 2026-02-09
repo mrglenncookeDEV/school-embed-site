@@ -96,7 +96,7 @@ const ICON_MAP = {
   sparkles: Sparkles,
 };
 
-const BAR_CHART_MARGIN = { top: 20, right: 30, left: 0, bottom: 60 };
+const BAR_CHART_MARGIN = { top: 80, right: 30, left: 0, bottom: 60 };
 
 // Canonical values list (single source of truth for ordering, legend, and normalisation)
 const CANONICAL_VALUES = [
@@ -882,7 +882,7 @@ function TopRoundedBar(props) {
   `;
 
   const centerX = x + width / 2;
-  const badgeY = y + radius + 38;
+  const badgeY = y - 40;
   const smileySize = 16;
 
   const badgeSize = 70;
@@ -2301,7 +2301,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                       <ResponsiveContainer ref={weekChartRef} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={weekRows}
-                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                        margin={BAR_CHART_MARGIN}
                         barCategoryGap="0%"
                         barGap={0}
                       >
@@ -2313,7 +2313,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                             tickLine={false}
                             axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                           />
-                          <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                          <YAxis domain={[0, (dataMax) => Math.round(dataMax * 1.5)]} allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
                           <Tooltip content={renderHouseTooltip} />
                           <Bar
                             dataKey="points"
@@ -2519,7 +2519,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                     <ResponsiveContainer ref={termChartRef} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={termRows}
-                        margin={{ top: 10, right: 0, left: 0, bottom: 60 }}
+                        margin={BAR_CHART_MARGIN}
                         barCategoryGap="0%"
                         barGap={0}
                       >
@@ -2531,7 +2531,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                           tickLine={false}
                           axisLine={{ stroke: "#0f172a", strokeWidth: 2 }}
                         />
-                        <YAxis allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
+                        <YAxis domain={[0, (dataMax) => Math.round(dataMax * 1.5)]} allowDecimals={false} tickLine={false} axisLine={{ stroke: "#0f172a", strokeWidth: 2 }} width={40} />
                         <Tooltip content={renderHouseTooltip} />
                         <Bar
                           dataKey="points"
