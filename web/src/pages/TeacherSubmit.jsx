@@ -159,6 +159,14 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
   }, []);
 
   const numericPoints = Number(form.points);
+  const pointsValue = Number.isNaN(numericPoints) ? 0 : numericPoints;
+  const clampPoints = (value) => Math.min(500, Math.max(1, value));
+  const adjustPoints = (delta) => {
+    const current = Number(form.points || 0);
+    const safeCurrent = Number.isNaN(current) ? 0 : current;
+    const next = clampPoints(safeCurrent + delta);
+    setForm((prev) => ({ ...prev, points: String(next) }));
+  };
   const isSubmitting = status.type === "loading";
   const submitDisabled =
     isSubmitting ||
@@ -225,7 +233,7 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
 
   return (
     <section className="flex w-full flex-1 flex-col gap-2 pb-0">
-      <div className="flex flex-wrap items-center gap-3 rounded-3xl bg-[#1f2aa6] px-4 py-3 text-white">
+      <div className="relative flex flex-wrap items-center gap-3 rounded-3xl bg-[#1f2aa6] px-4 py-3 text-white">
         <img
           src={`${import.meta.env.BASE_URL}favicon.png`}
           alt="House Points logo"
@@ -234,7 +242,7 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
         />
         <div className="space-y-2">
           <p
-            className={`text-xs font-semibold uppercase tracking-[0.3em] ${
+            className={`text-xs font-semibold uppercase tracking-tight sm:tracking-wide ${
               deadlinePassed ? "text-rose-200" : "text-white/80"
             }`}
           >
@@ -253,7 +261,7 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-full px-3 py-1 text-xs font-semibold uppercase text-white transition bg-[linear-gradient(180deg,#fecaca_0%,#ef4444_55%,#b91c1c_100%)] hover:brightness-105 active:translate-y-[1px]"
+            className="absolute top-3 right-3 rounded-full px-3 py-1 text-xs font-semibold uppercase text-white transition bg-[linear-gradient(180deg,#fecaca_0%,#ef4444_55%,#b91c1c_100%)] hover:brightness-105 active:translate-y-[1px]"
           >
             Close
           </button>
@@ -279,70 +287,107 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm font-semibold text-slate-700">
                 Class
-                <select
-                  value={form.classId}
-                  onChange={(event) => handleClassChange(event.target.value)}
-                  disabled={formDisabled}
-                  className={`${inputClass} ${inputFill}`}
-                >
-                  <option value="">Select class</option>
-                  {classes.map((klass) => (
-                    <option key={klass.id} value={klass.id}>
-                      {klass.name} · {klass.teacherDisplayName}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={form.classId}
+                    onChange={(event) => handleClassChange(event.target.value)}
+                    disabled={formDisabled}
+                    className={`${inputClass} ${inputFill} rounded-full appearance-none pr-10`}
+                  >
+                    <option value="">Select class</option>
+                    {classes.map((klass) => (
+                      <option key={klass.id} value={klass.id}>
+                        {klass.name} · {klass.teacherDisplayName}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                    ▼
+                  </span>
+                </div>
               </label>
 
               <label className="space-y-1 text-sm font-semibold text-slate-700">
                 House
-                <select
-                  value={form.houseId}
-                  onChange={(event) => setForm({ ...form, houseId: event.target.value })}
-                  disabled={formDisabled}
-                  className={`${inputClass} ${inputFill}`}
-                >
-                  <option value="">Select house</option>
-                  {houses.map((house) => (
-                    <option key={house.id} value={house.id}>
-                      {house.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={form.houseId}
+                    onChange={(event) => setForm({ ...form, houseId: event.target.value })}
+                    disabled={formDisabled}
+                    className={`${inputClass} ${inputFill} rounded-full appearance-none pr-10`}
+                  >
+                    <option value="">Select house</option>
+                    {houses.map((house) => (
+                      <option key={house.id} value={house.id}>
+                        {house.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                    ▼
+                  </span>
+                </div>
               </label>
             </div>
 
             <div className="flex flex-nowrap items-end gap-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <label className="text-sm font-medium text-slate-700">Award Category</label>
-                <select
-                  value={awardCategory}
-                  onChange={(event) => setAwardCategory(event.target.value)}
-                  disabled={formDisabled}
-                  className={`${compactInputClass} w-full min-w-0`}
-                >
-                  {AWARD_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={awardCategory}
+                    onChange={(event) => setAwardCategory(event.target.value)}
+                    disabled={formDisabled}
+                    className={`${compactInputClass} w-full min-w-0 !rounded-full appearance-none pr-10 focus:border-sky-500`}
+                  >
+                    {AWARD_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                    ▼
+                  </span>
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-slate-700">Points</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
-                  step="1"
-                  value={form.points}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, points: event.target.value }))
-                  }
-                  disabled={formDisabled}
-                  className={`${compactInputClass} w-[108px] text-center border-4 border-sky-400`}
-                  required
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    step="1"
+                    value={form.points}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, points: event.target.value }))
+                    }
+                    disabled={formDisabled}
+                    className={`${compactInputClass} w-[108px] text-center !border-4 !border-sky-400 focus:!border-sky-500 !rounded-full custom-stepper`}
+                    required
+                  />
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(1)}
+                      disabled={formDisabled || pointsValue >= 500}
+                      className="h-6 w-6 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-sm hover:bg-emerald-400 disabled:opacity-50"
+                      aria-label="Increase points"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(-1)}
+                      disabled={formDisabled || pointsValue <= 1}
+                      className="h-6 w-6 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-sm hover:bg-rose-400 disabled:opacity-50"
+                      aria-label="Decrease points"
+                    >
+                      ▼
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

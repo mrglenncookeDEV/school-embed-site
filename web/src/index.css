@@ -18,6 +18,17 @@ body {
   box-sizing: border-box;
 }
 
+/* Ensure number spinners stay visible */
+input.custom-stepper::-webkit-outer-spin-button,
+input.custom-stepper::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input.custom-stepper {
+  -moz-appearance: textfield;
+}
+
 /* ─────────────────────────────────────────────
    Trophy glow animation (leader indicator)
    ───────────────────────────────────────────── */
