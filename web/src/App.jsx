@@ -227,7 +227,12 @@ function AppContent() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef(null);
-  const isEmbedRoute = location.pathname.startsWith("/embed/");
+  const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  const relativePath = location.pathname.startsWith(basePath)
+    ? location.pathname.slice(basePath.length) || "/"
+    : location.pathname;
+  const isEmbedRoute = relativePath.startsWith("/embed/");
+  const isPublicRoute = relativePath.startsWith("/public/");
   // Worker host for reports (prefer env; otherwise use current origin).
   const STAFF_SECRET =
     (import.meta.env.VITE_STAFF_REPORT_SECRET || "s3cret-8d7f2e3e-62c8-4f7a-9c6f-9f3d4b96a8f2").trim();
@@ -347,70 +352,71 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Navigation: Grid 2 cols on mobile, 4 cols on sm+ */}
-            <nav className="grid w-full grid-cols-2 gap-2 mt-4 sm:mt-0 sm:w-auto sm:ml-auto sm:grid-cols-4">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                if (item.action) {
+            {!isPublicRoute && (
+              <nav className="grid w-full grid-cols-2 gap-2 mt-4 sm:mt-0 sm:w-auto sm:ml-auto sm:grid-cols-4">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  if (item.action) {
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={item.action}
+                        className={pillBaseClass}
+                      >
+                        <Icon className="w-4 h-4 text-slate-800" />
+                        <span className={pillTextClass}>
+                          {item.label}
+                        </span>
+                      </button>
+                    );
+                  }
                   return (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={item.action}
-                      className={pillBaseClass}
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `${pillBaseClass} ${isActive ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-[#1f2aa6]" : ""}`
+                      }
                     >
                       <Icon className="w-4 h-4 text-slate-800" />
                       <span className={pillTextClass}>
                         {item.label}
                       </span>
-                    </button>
+                    </NavLink>
                   );
-                }
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `${pillBaseClass} ${isActive ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-[#1f2aa6]" : ""}`
-                    }
-                  >
-                    <Icon className="w-4 h-4 text-slate-800" />
-                    <span className={pillTextClass}>
-                      {item.label}
-                    </span>
-                  </NavLink>
-                );
-              })}
+                })}
 
-              <div
-                className="relative"
-                onClick={(event) => event.stopPropagation()}
-                onMouseEnter={() => setReportsOpen(true)}
-                onMouseLeave={() => setReportsOpen(false)}
-              >
-                <button
-                  type="button"
+                <div
+                  className="relative"
+                  onClick={(event) => event.stopPropagation()}
                   onMouseEnter={() => setReportsOpen(true)}
-                  className={pillBaseClass}
+                  onMouseLeave={() => setReportsOpen(false)}
                 >
-                  <ChartPie className="w-4 h-4 text-slate-800" />
-                  <span className={pillTextClass}>
-                    Reports
-                  </span>
-                </button>
-                {reportsOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg z-20"
-                    onClick={(event) => event.stopPropagation()}
+                  <button
+                    type="button"
+                    onMouseEnter={() => setReportsOpen(true)}
+                    className={pillBaseClass}
                   >
-                    <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50 rounded-xl">
-                      In Development...
+                    <ChartPie className="w-4 h-4 text-slate-800" />
+                    <span className={pillTextClass}>
+                      Reports
+                    </span>
+                  </button>
+                  {reportsOpen && (
+                    <div
+                      className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg z-20"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50 rounded-xl">
+                        In Development...
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </nav>
+                  )}
+                </div>
+              </nav>
+            )}
           </div>
         </header>
       )}
@@ -438,6 +444,8 @@ function AppContent() {
             <Route path="/teacher" element={<Scoreboard />} />
             <Route path="/admin" element={<AdminGate><Admin /></AdminGate>} />
             <Route path="/embed/scoreboard" element={<EmbedScoreboard />} />
+            <Route path="/public" element={<Navigate to="/public/scoreboard" replace />} />
+            <Route path="/public/scoreboard" element={<EmbedScoreboard />} />
             <Route path="/test-houses" element={<TestHouses />} />
 
             {/* Reports */}

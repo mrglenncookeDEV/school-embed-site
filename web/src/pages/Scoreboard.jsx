@@ -986,10 +986,18 @@ const getLeadingHouseRow = (rows = []) => {
   }, null);
 };
 
-export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
+export function ScoreboardContent({
+  showTotalsPanel = true,
+  minimal = false,
+  publicDisplay = false,
+}) {
   const location = useLocation();
-  const ALLOWED_PATHS = ["/scoreboard", "/teacher", "/embed/scoreboard"];
-  const isAllowedPath = ALLOWED_PATHS.some((p) => location.pathname.startsWith(p));
+  const ALLOWED_PATHS = ["/scoreboard", "/teacher", "/embed/scoreboard", "/public/scoreboard"];
+  const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  const relativePath = location.pathname.startsWith(basePath)
+    ? location.pathname.slice(basePath.length) || "/"
+    : location.pathname;
+  const isAllowedPath = ALLOWED_PATHS.some((p) => relativePath.startsWith(p));
 
   const [scoreboard, setScoreboard] = useState({
     totalsThisWeek: [],
@@ -2717,78 +2725,80 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
 
       {!valuesLoading && (
         <div ref={valuesRef} className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-sm mb-6">
-        <div className="absolute right-6 top-6 flex gap-2 no-export z-[5]">
-          <button
-            type="button"
-            disabled={exporting.slides}
-            onClick={async () => {
-              setExporting((p) => ({ ...p, slides: true }));
-              try {
-                const currentRows = currentPeriod === "week" ? weekRows : termRows;
-                const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
-                const leaderRow = sorted[0];
-                const secondRow = sorted[1];
-                const leaderName = leaderRow
-                  ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
-                  : "—";
-                const leaderColor = leaderRow
-                  ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
-                  : "#2563eb";
-                const leaderMargin =
-                  leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
-                const prevLeaderName =
-                  currentPeriod === "week"
-                    ? (prevWeekLeaderRef.current
-                      ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
-                      : null)
-                    : (prevTermLeaderRef.current
-                      ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
-                      : null);
-                const chartData = currentRows.map((row) => ({
-                  name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
-                  points: row.points || 0,
-                  color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
-                }));
+        {!publicDisplay && (
+          <div className="absolute right-6 top-6 flex gap-2 no-export z-[5]">
+            <button
+              type="button"
+              disabled={exporting.slides}
+              onClick={async () => {
+                setExporting((p) => ({ ...p, slides: true }));
+                try {
+                  const currentRows = currentPeriod === "week" ? weekRows : termRows;
+                  const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+                  const leaderRow = sorted[0];
+                  const secondRow = sorted[1];
+                  const leaderName = leaderRow
+                    ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+                    : "—";
+                  const leaderColor = leaderRow
+                    ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+                    : "#2563eb";
+                  const leaderMargin =
+                    leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
+                  const prevLeaderName =
+                    currentPeriod === "week"
+                      ? (prevWeekLeaderRef.current
+                        ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+                        : null)
+                      : (prevTermLeaderRef.current
+                        ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+                        : null);
+                  const chartData = currentRows.map((row) => ({
+                    name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+                    points: row.points || 0,
+                    color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+                  }));
 
-                await exportAssemblyDeck({
-                  view: currentPeriod,
-                  periodLabel: currentPeriod === "week" ? "week" : "term",
-                  updatedLabel: lastUpdatedLabel,
-                  summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
-                  leader: {
-                    name: leaderName,
-                    color: leaderColor,
-                    margin: leaderMargin,
-                    prevLeader: prevLeaderName,
-                  },
-                  chartData,
-                  deltas: houseDelta,
-                  totalValues,
-                  houses: sortedHouses.map((id) => ({
-                    id,
-                    name: HOUSES[id].name,
-                    data: valuesByHouse[id] || [],
-                    caption: valueCaptions.houses?.[id],
-                    color: HOUSES[id].color,
-                  })),
-                  colours: categoryColorMap,
-                });
-              } catch (err) {
-                console.error("Export slides failed", err);
-                alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
-              } finally {
-                setExporting((p) => ({ ...p, slides: false }));
-              }
-            }}
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
-              exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
-            } no-export`}
-          >
-            <Presentation className="h-4 w-4" />
-            {exporting.slides ? "Building…" : "Export slides"}
-            {exporting.slides && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
-          </button>
-        </div>
+                  await exportAssemblyDeck({
+                    view: currentPeriod,
+                    periodLabel: currentPeriod === "week" ? "week" : "term",
+                    updatedLabel: lastUpdatedLabel,
+                    summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
+                    leader: {
+                      name: leaderName,
+                      color: leaderColor,
+                      margin: leaderMargin,
+                      prevLeader: prevLeaderName,
+                    },
+                    chartData,
+                    deltas: houseDelta,
+                    totalValues,
+                    houses: sortedHouses.map((id) => ({
+                      id,
+                      name: HOUSES[id].name,
+                      data: valuesByHouse[id] || [],
+                      caption: valueCaptions.houses?.[id],
+                      color: HOUSES[id].color,
+                    })),
+                    colours: categoryColorMap,
+                  });
+                } catch (err) {
+                  console.error("Export slides failed", err);
+                  alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
+                } finally {
+                  setExporting((p) => ({ ...p, slides: false }));
+                }
+              }}
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-sm transition ${
+                exporting.slides ? "bg-slate-400 cursor-wait" : "bg-orange-600 hover:bg-orange-700"
+              } no-export`}
+            >
+              <Presentation className="h-4 w-4" />
+              {exporting.slides ? "Building…" : "Export slides"}
+              {exporting.slides && <span className="h-3 w-3 animate-spin rounded-full border border-white/70 border-t-transparent" />}
+            </button>
+          </div>
+        )}
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -2804,7 +2814,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                 {currentPeriod === "week" ? "This week" : "This term"} by award category
               </p>
             </div>
-            {isStaff && (
+            {isStaff && !publicDisplay && (
               <label className="flex items-center gap-2 text-xs text-slate-500 mt-2">
                 <input
                   type="checkbox"
