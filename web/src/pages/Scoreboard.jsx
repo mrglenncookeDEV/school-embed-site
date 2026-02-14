@@ -558,8 +558,10 @@ function ProgressTrack({
               house.houseKey ?? house.houseId ?? house.house ?? house.id ?? "";
             const canonicalKey = resolveHouseKey(highlightKey);
             const houseMeta = HOUSES[canonicalKey] ?? {};
-            const dbIconName = String(house.icon || houseMeta.iconName || "").toLowerCase();
-            const HouseIcon = ICON_MAP[dbIconName] || houseMeta.icon || ICON_MAP.shield;
+            const dbIconName = String(
+              house.iconName || (typeof house.icon === "string" ? house.icon : "") || houseMeta.iconName || ""
+            ).toLowerCase();
+            const HouseIcon = house.icon || ICON_MAP[dbIconName] || houseMeta.icon || ICON_MAP.shield;
             const isHighlighted = highlightSet.has(highlightKey);
             const badgeShadow =
               isHighlighted
@@ -945,24 +947,28 @@ const normalizeHouseRows = (rows = []) => {
   const ordered = HOUSE_ORDER.map((houseId) => {
     const base = HOUSES[houseId] ?? {};
     const row = byId[houseId];
+    const iconName = String(row?.icon ?? base.iconName ?? "").toLowerCase();
 
     return {
       houseKey: houseId,
       houseId,
       name: row?.name ?? base.name ?? String(houseId),
       color: row?.color ?? base.color ?? "#2563eb",
-      icon: base.icon ?? null,
+      iconName,
+      icon: ICON_MAP[iconName] || base.icon || null,
       points: Number(row?.points ?? 0),
     };
   });
 
   unmatched.forEach((row) => {
+    const iconName = String(row.icon ?? "").toLowerCase();
     ordered.push({
       houseKey: row.houseKey ?? row.houseId ?? row.house ?? row.id ?? row.name,
       houseId: row.houseId ?? row.house ?? row.id,
       name: row.name ?? "Unknown House",
       color: row.color ?? "#64748b",
-      icon: null,
+      iconName,
+      icon: ICON_MAP[iconName] || null,
       points: Number(row.points ?? 0),
     });
   });
@@ -1994,7 +2000,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
       : null;
 
   const LeadingHouseIcon = leadingHouse
-    ? (HOUSES[resolveHouseKey(
+    ? (ICON_MAP[String(leadingHouse.icon || "").toLowerCase()] || HOUSES[resolveHouseKey(
       leadingHouse.houseId ??
       leadingHouse.house_id ??
       leadingHouse.house ??
@@ -2002,7 +2008,7 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
     )]?.icon || null)
     : null;
   const TermLeadingHouseIcon = termLeadingRow
-    ? (HOUSES[resolveHouseKey(
+    ? (ICON_MAP[String(termLeadingRow.icon || "").toLowerCase()] || HOUSES[resolveHouseKey(
       termLeadingRow.houseId ??
       termLeadingRow.house_id ??
       termLeadingRow.house ??
@@ -3049,7 +3055,9 @@ export function ScoreboardContent({ showTotalsPanel = true, minimal = false }) {
                   const houseId = entry.house_id || entry.houseId;
                   const houseMeta = HOUSES[resolveHouseKey(houseId)];
                   const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
-                  const HouseIcon = houseMeta?.icon;
+                  const HouseIcon =
+                    ICON_MAP[String(entry.house_icon || "").toLowerCase()] ||
+                    houseMeta?.icon;
                   const houseLabel = houseMeta?.name ?? entry.house_name;
                   const teacherLabel = entry.teacherDisplayName || entry.submitted_by_email || "—";
                   const submittedByLabel = `${entry.class_name}${teacherLabel ? ` · ${teacherLabel}` : ""}`;

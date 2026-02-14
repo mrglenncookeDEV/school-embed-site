@@ -293,6 +293,7 @@ async function fetchScoreboard(db, weekId) {
         h.id AS house_id,
         h.name,
         h.color,
+        h.icon,
         COALESCE(SUM(pe.points), 0) AS points
       FROM houses h
       LEFT JOIN point_entries pe ON pe.house_id = h.id AND pe.week_id = ?
@@ -308,6 +309,7 @@ async function fetchScoreboard(db, weekId) {
         h.id AS house_id,
         h.name,
         h.color,
+        h.icon,
         COALESCE(SUM(pe.points), 0) AS points
       FROM houses h
       LEFT JOIN point_entries pe ON pe.house_id = h.id
@@ -326,12 +328,14 @@ async function fetchScoreboard(db, weekId) {
       houseId: row.house_id,
       name: row.name,
       color: row.color,
+      icon: row.icon || "shield",
       points: Number(row.points ?? 0),
     })),
     totalsAllTime: allTimeResults.map((row) => ({
       houseId: row.house_id,
       name: row.name,
       color: row.color,
+      icon: row.icon || "shield",
       points: Number(row.points ?? 0),
     })),
     lastUpdated: (lastUpdatedResults[0] && lastUpdatedResults[0].lastUpdated) || null,
@@ -357,6 +361,7 @@ async function fetchTermScoreboard(db, term) {
         h.id AS house_id,
         h.name,
         h.color,
+        h.icon,
         COALESCE(SUM(pe.points), 0) AS points
       FROM houses h
       LEFT JOIN point_entries pe ON pe.house_id = h.id
@@ -371,6 +376,7 @@ async function fetchTermScoreboard(db, term) {
     houseId: row.house_id,
     name: row.name,
     color: row.color,
+    icon: row.icon || "shield",
     points: Number(row.points ?? 0),
   }));
 }
@@ -426,7 +432,8 @@ async function fetchEntries(db, weekId) {
         c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
-        h.color AS house_color
+        h.color AS house_color,
+        h.icon AS house_icon
       FROM point_entries pe
       JOIN classes c ON c.id = pe.class_id
       JOIN houses h ON h.id = pe.house_id
@@ -466,7 +473,8 @@ async function fetchAllEntries(db) {
         c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
-        h.color AS house_color
+        h.color AS house_color,
+        h.icon AS house_icon
       FROM point_entries pe
       JOIN classes c ON c.id = pe.class_id
       JOIN houses h ON h.id = pe.house_id
@@ -504,7 +512,8 @@ async function fetchEntriesByTerm(db, term) {
         c.Teacher_LastName,
         h.id AS house_id,
         h.name AS house_name,
-        h.color AS house_color
+        h.color AS house_color,
+        h.icon AS house_icon
       FROM point_entries pe
       JOIN classes c ON c.id = pe.class_id
       JOIN houses h ON h.id = pe.house_id
@@ -953,12 +962,39 @@ async function fetchAudit(db, limit) {
   }));
 }
 
+async function handleAdminUnlock(request, env) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const candidate = String(payload?.password ?? "");
+  const HARD_CODED_ADMIN_PASSWORD = "HouseAdmin2026!";
+  const configured = String(env.ADMIN_PASSWORD ?? "").trim();
+  const expected =
+    configured && configured !== "REPLACE_WITH_ADMIN_PASSWORD"
+      ? configured
+      : HARD_CODED_ADMIN_PASSWORD;
+
+  if (candidate !== expected) {
+    return json({ error: "Invalid password" }, 401);
+  }
+
+  return json({ success: true });
+}
+
 async function handleApi(request, env, url) {
   const pathname = url.pathname;
   const method = request.method;
 
   if (pathname === `/api/message` && method === "GET") {
     return json({ message: "Hello from Worker API" });
+  }
+
+  if (pathname === `/api/admin/unlock` && method === "POST") {
+    return handleAdminUnlock(request, env);
   }
 
   const db = env.DB;

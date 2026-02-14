@@ -11,6 +11,66 @@ const Scoreboard = lazy(() => import("./pages/Scoreboard"));
 const TeacherSubmit = lazy(() => import("./pages/TeacherSubmit"));
 const TestHouses = lazy(() => import("./pages/TestHouses"));
 
+function AdminGate({ children }) {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleUnlock = async (event) => {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}api/admin/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Invalid password");
+      }
+      setIsUnlocked(true);
+      setPassword("");
+    } catch (err) {
+      setError(err.message || "Unable to unlock admin");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isUnlocked) {
+    return children;
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h1 className="text-xl font-semibold text-slate-900">Admin Access</h1>
+      <p className="mt-2 text-sm text-slate-600">Enter the admin password to continue.</p>
+      <form onSubmit={handleUnlock} className="mt-5 space-y-4">
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900"
+          placeholder="Admin password"
+          autoComplete="current-password"
+          required
+        />
+        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+        >
+          {isSubmitting ? "Checking..." : "Unlock Admin"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function SlideUpModal({ open, onClose, children }) {
   const [modalHeight, setModalHeight] = useState(92);
   const resizingRef = useRef(false);
@@ -376,7 +436,7 @@ function AppContent() {
             <Route path="/" element={<Navigate to="/scoreboard" replace />} />
             <Route path="/scoreboard" element={<Scoreboard />} />
             <Route path="/teacher" element={<Scoreboard />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin" element={<AdminGate><Admin /></AdminGate>} />
             <Route path="/embed/scoreboard" element={<EmbedScoreboard />} />
             <Route path="/test-houses" element={<TestHouses />} />
 

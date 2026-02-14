@@ -152,6 +152,24 @@ export default function Admin() {
     { id: "wind", icon: Wind },
     { id: "sparkles", icon: Sparkles },
   ];
+  const ICON_ID_ALIASES = {
+    trees: "tree",
+    water: "droplets",
+    fire: "flame",
+    spirit: "sparkles",
+  };
+  const normaliseIconId = (rawIcon) => {
+    const id = String(rawIcon ?? "").trim().toLowerCase();
+    return ICON_ID_ALIASES[id] ?? id;
+  };
+  const resolveAvailableIcon = (rawIcon) => {
+    const iconId = normaliseIconId(rawIcon) || "shield";
+    return AVAILABLE_ICONS.find((item) => item.id === iconId) || AVAILABLE_ICONS[0];
+  };
+  const resolveHouseIcon = (house = {}) => {
+    const canonical = getHouseById(house.id);
+    return resolveAvailableIcon(house.icon || house.name || canonical?.id);
+  };
 
   const rangeToQuery = useCallback((range) => {
     if (range === "term") return "term";
@@ -461,7 +479,10 @@ export default function Admin() {
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(houseForm),
+        body: JSON.stringify({
+          ...houseForm,
+          icon: resolveAvailableIcon(houseForm.icon).id,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -505,7 +526,7 @@ export default function Admin() {
       setHouseForm({
         name: house.name,
         color: house.color,
-        icon: house.icon || "shield",
+        icon: resolveHouseIcon(house).id,
       });
     } else {
       setEditingHouse(null);
@@ -805,7 +826,9 @@ export default function Admin() {
                   const houseId = entry.house_id || entry.houseId;
                   const houseMeta = getHouseById(houseId);
                   const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
-                  const HouseIcon = houseMeta?.icon;
+                  const HouseIcon =
+                    resolveAvailableIcon(entry.house_icon || entry.house_name).icon ||
+                    houseMeta?.icon;
                   const houseLabel = houseMeta?.name ?? entry.house_name;
                   const teacherLabel = entry.teacherDisplayName || entry.submitted_by_email || "—";
                   const submittedByLabel = `${entry.class_name}${teacherLabel ? ` · ${teacherLabel}` : ""}`;
@@ -997,7 +1020,7 @@ export default function Admin() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {houses.map((house) => {
-                      const IconComp = AVAILABLE_ICONS.find(i => i.id === (house.icon || "shield"))?.icon || Shield;
+                      const IconComp = resolveHouseIcon(house).icon;
                       return (
                         <tr key={house.id}>
                           <td className="px-3 py-3 font-semibold text-slate-900">
@@ -1337,7 +1360,7 @@ export default function Admin() {
                   House Icon
                 </label>
                 <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1 border border-slate-100 rounded-xl">
-                  {AVAILABLE_ICONS.map(({ id }) => (
+                  {AVAILABLE_ICONS.map(({ id, icon: IconComp }) => (
                     <button
                       key={id}
                       type="button"

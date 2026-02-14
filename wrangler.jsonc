@@ -17,7 +17,8 @@
     "crons": ["0 7 * * MON"]
   },
   "vars": {
-    "STAFF_REPORT_SECRET": "REPLACE_WITH_LONG_RANDOM_STRING"
+    "STAFF_REPORT_SECRET": "REPLACE_WITH_LONG_RANDOM_STRING",
+    "ADMIN_PASSWORD": "REPLACE_WITH_ADMIN_PASSWORD"
   },
   "kv_namespaces": [
     {
