@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 import houseBadge from "../assets/house_gold.png";
-import { HOUSES, HOUSE_ORDER, resolveHouseKey, getHouseById } from "../config/houses";
+import { HOUSES, resolveHouseKey, getHouseById } from "../config/houses";
 import { WaffleChart } from "../components/charts/WaffleChart";
 import { exportAssemblyDeck } from "../utils/exportAssemblyDeck";
 import {
@@ -919,7 +919,19 @@ function TopRoundedBar(props) {
 const getCanonicalIdForRow = (row) => {
   const rawId = row.houseId ?? row.house_id ?? row.house ?? row.id;
   const canonical = resolveHouseKey(rawId);
-  if (canonical) return canonical;
+  if (canonical) {
+    const canonicalName = String(HOUSES[canonical]?.name ?? "").trim().toLowerCase();
+    const rowName = String(row.name ?? row.house_name ?? "").trim().toLowerCase();
+    // If a numeric/raw DB id maps to a legacy canonical house with a different name,
+    // prefer the raw ID so current school houses are not rewritten to legacy labels.
+    if (rawId != null && rowName && canonicalName && rowName !== canonicalName) {
+      return String(rawId);
+    }
+    return canonical;
+  }
+  if (rawId != null && String(rawId).trim() !== "") {
+    return String(rawId);
+  }
 
   const name = String(row.name ?? row.house_name ?? "").trim().toLowerCase();
   const match = Object.entries(HOUSES).find(
@@ -933,18 +945,19 @@ const getCanonicalIdForRow = (row) => {
 
 const normalizeHouseRows = (rows = []) => {
   const byId = {};
-  const unmatched = [];
+  const orderedIds = [];
 
   rows.forEach((row) => {
     const id = getCanonicalIdForRow(row);
     if (id) {
+      if (!byId[id]) {
+        orderedIds.push(id);
+      }
       byId[id] = row;
-    } else {
-      unmatched.push(row);
     }
   });
 
-  const ordered = HOUSE_ORDER.map((houseId) => {
+  return orderedIds.map((houseId) => {
     const base = HOUSES[houseId] ?? {};
     const row = byId[houseId];
     const iconName = String(row?.icon ?? base.iconName ?? "").toLowerCase();
@@ -959,21 +972,6 @@ const normalizeHouseRows = (rows = []) => {
       points: Number(row?.points ?? 0),
     };
   });
-
-  unmatched.forEach((row) => {
-    const iconName = String(row.icon ?? "").toLowerCase();
-    ordered.push({
-      houseKey: row.houseKey ?? row.houseId ?? row.house ?? row.id ?? row.name,
-      houseId: row.houseId ?? row.house ?? row.id,
-      name: row.name ?? "Unknown House",
-      color: row.color ?? "#64748b",
-      iconName,
-      icon: ICON_MAP[iconName] || null,
-      points: Number(row.points ?? 0),
-    });
-  });
-
-  return ordered;
 };
 
 const getLeadingHouseRow = (rows = []) => {
@@ -1160,7 +1158,7 @@ export function ScoreboardContent({
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {items.length === 0 && <li className="text-slate-400">No house data</li>}
           {items.map(([houseId, pts]) => {
-            const house = getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            const house = houseMetaById[houseId] || getHouseById(houseId) || { name: houseId, color: "#64748b" };
             return (
               <li key={houseId} className="flex items-center gap-2">
                 <span
@@ -1194,7 +1192,7 @@ export function ScoreboardContent({
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {items.length === 0 && <li className="text-slate-400">No house data</li>}
           {items.map(([houseId, pts]) => {
-            const house = getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            const house = houseMetaById[houseId] || getHouseById(houseId) || { name: houseId, color: "#64748b" };
             return (
               <li key={houseId} className="flex items-center gap-2">
                 <span
@@ -1466,6 +1464,20 @@ export function ScoreboardContent({
     const raw = scoreboard.term?.rows ?? [];
     return normalizeHouseRows(raw);
   }, [scoreboard.term]);
+  const houseMetaById = useMemo(() => {
+    const map = {};
+    [...weekRows, ...termRows].forEach((row) => {
+      const key = String(row.houseKey ?? row.houseId ?? "").trim();
+      if (!key) return;
+      map[key] = {
+        id: key,
+        name: row.name ?? getHouseById(key)?.name ?? key,
+        color: row.color ?? getHouseById(key)?.color ?? "#94a3b8",
+        icon: row.icon ?? getHouseById(key)?.icon ?? null,
+      };
+    });
+    return map;
+  }, [weekRows, termRows]);
   const termTotalPoints = useMemo(
     () => termRows.reduce((acc, row) => acc + (row.points ?? 0), 0),
     [termRows]
@@ -1536,32 +1548,43 @@ export function ScoreboardContent({
     });
     return map;
   }, [prevHousesData]);
+  const valueHouseIds = useMemo(() => {
+    const keys = new Set([
+      ...Object.keys(houseMetaById),
+      ...Object.keys(valuesByHouse),
+      ...Object.keys(prevValuesByHouse),
+    ]);
+    return Array.from(keys);
+  }, [houseMetaById, valuesByHouse, prevValuesByHouse]);
   const houseDominance = useMemo(() => {
     const map = {};
-    HOUSE_ORDER.forEach((houseId) => {
+    valueHouseIds.forEach((houseId) => {
       const data = normaliseValues(valuesByHouse[houseId] || []);
       map[houseId] = getDominantPct(data);
     });
     return map;
-  }, [valuesByHouse, normaliseValues, getDominantPct]);
+  }, [valuesByHouse, valueHouseIds, normaliseValues, getDominantPct]);
   const houseDelta = useMemo(() => {
     const map = {};
-    HOUSE_ORDER.forEach((houseId) => {
+    valueHouseIds.forEach((houseId) => {
       const curPct = getDominantPct(normaliseValues(valuesByHouse[houseId] || []));
       const prevPct = getDominantPct(normaliseValues(prevValuesByHouse[houseId] || []));
       map[houseId] = curPct - prevPct;
     });
     return map;
-  }, [valuesByHouse, prevValuesByHouse, getDominantPct, normaliseValues]);
+  }, [valuesByHouse, prevValuesByHouse, valueHouseIds, getDominantPct, normaliseValues]);
   const sortedHouses = useMemo(() => {
-    return [...HOUSE_ORDER].sort((a, b) => {
+    return [...valueHouseIds].sort((a, b) => {
       const diff =
         getDominantPct(normaliseValues(valuesByHouse[b] || [])) -
         getDominantPct(normaliseValues(valuesByHouse[a] || []));
 
-      return diff !== 0 ? diff : HOUSE_ORDER.indexOf(a) - HOUSE_ORDER.indexOf(b);
+      if (diff !== 0) return diff;
+      return String(houseMetaById[a]?.name ?? a).localeCompare(
+        String(houseMetaById[b]?.name ?? b)
+      );
     });
-  }, [valuesByHouse, getDominantPct, normaliseValues]);
+  }, [valueHouseIds, valuesByHouse, houseMetaById, getDominantPct, normaliseValues]);
   const classHouseBreakdown = useMemo(() => {
     const map = {};
     classValuesData.forEach((row) => {
@@ -1764,14 +1787,16 @@ export function ScoreboardContent({
     const sorted = [...weekRows].sort((a, b) => (b.points || 0) - (a.points || 0));
     const leader = sorted[0];
     const second = sorted[1];
-    const leaderName = leader ? (getHouseById(leader.houseKey)?.name || leader.name || leader.houseKey) : null;
+    const leaderName = leader
+      ? (leader.name || houseMetaById[leader.houseKey]?.name || getHouseById(leader.houseKey)?.name || leader.houseKey)
+      : null;
     const prevLeaderName = prevWeekLeaderRef.current
-      ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+      ? houseMetaById[prevWeekLeaderRef.current]?.name || getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
       : null;
     const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
     const strongestDeltaHouse =
       second && leaderMargin <= 10
-        ? getHouseById(second.houseKey)?.name || second.name || second.houseKey
+        ? second.name || houseMetaById[second.houseKey]?.name || getHouseById(second.houseKey)?.name || second.houseKey
         : null;
     return generateSummaryLine({
       leader: leaderName,
@@ -1780,20 +1805,22 @@ export function ScoreboardContent({
       strongestDeltaHouse,
       periodLabel: "week",
     });
-  }, [weekRows, houseDelta]);
+  }, [weekRows, houseDelta, houseMetaById]);
 
   const termSummaryLine = useMemo(() => {
     const sorted = [...termRows].sort((a, b) => (b.points || 0) - (a.points || 0));
     const leader = sorted[0];
     const second = sorted[1];
-    const leaderName = leader ? (getHouseById(leader.houseKey)?.name || leader.name || leader.houseKey) : null;
+    const leaderName = leader
+      ? (leader.name || houseMetaById[leader.houseKey]?.name || getHouseById(leader.houseKey)?.name || leader.houseKey)
+      : null;
     const prevLeaderName = prevTermLeaderRef.current
-      ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+      ? houseMetaById[prevTermLeaderRef.current]?.name || getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
       : null;
     const leaderMargin = leader && second ? (leader.points || 0) - (second.points || 0) : 0;
     const strongestDeltaHouse =
       second && leaderMargin <= 10
-        ? getHouseById(second.houseKey)?.name || second.name || second.houseKey
+        ? second.name || houseMetaById[second.houseKey]?.name || getHouseById(second.houseKey)?.name || second.houseKey
         : null;
     return generateSummaryLine({
       leader: leaderName,
@@ -1802,7 +1829,7 @@ export function ScoreboardContent({
       strongestDeltaHouse,
       periodLabel: "term",
     });
-  }, [termRows, houseDelta]);
+  }, [termRows, houseDelta, houseMetaById]);
 
   useEffect(() => {
     const handler = () => {
@@ -1811,24 +1838,24 @@ export function ScoreboardContent({
       const leaderRow = sorted[0];
       const secondRow = sorted[1];
       const leaderName = leaderRow
-        ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+        ? leaderRow.name || houseMetaById[leaderRow.houseKey]?.name || getHouseById(leaderRow.houseKey)?.name || leaderRow.houseKey
         : "—";
       const leaderColor = leaderRow
-        ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+        ? leaderRow.color || houseMetaById[leaderRow.houseKey]?.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
         : "#2563eb";
       const leaderMargin = leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
       const prevLeaderName =
         currentPeriod === "week"
           ? (prevWeekLeaderRef.current
-            ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+            ? houseMetaById[prevWeekLeaderRef.current]?.name || getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
             : null)
           : (prevTermLeaderRef.current
-            ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+            ? houseMetaById[prevTermLeaderRef.current]?.name || getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
             : null);
       const chartData = currentRows.map((row) => ({
-        name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+        name: row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey,
         points: row.points || 0,
-        color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+        color: row.color || houseMetaById[row.houseKey]?.color || getHouseById(row.houseKey)?.color || "#94a3b8",
       }));
 
       exportAssemblyDeck({
@@ -1847,10 +1874,10 @@ export function ScoreboardContent({
         totalValues,
         houses: sortedHouses.map((id) => ({
           id,
-          name: HOUSES[id].name,
+          name: houseMetaById[id]?.name || getHouseById(id)?.name || id,
           data: valuesByHouse[id] || [],
           caption: valueCaptions.houses?.[id],
-          color: HOUSES[id].color,
+          color: houseMetaById[id]?.color || getHouseById(id)?.color || "#94a3b8",
         })),
         colours: categoryColorMap,
       }).catch((err) => console.error("Admin-triggered PPT export failed", err));
@@ -1868,6 +1895,7 @@ export function ScoreboardContent({
     totalValues,
     sortedHouses,
     valuesByHouse,
+    houseMetaById,
     categoryColorMap,
     lastUpdatedLabel,
     valueCaptions,
@@ -2738,25 +2766,25 @@ export function ScoreboardContent({
                   const leaderRow = sorted[0];
                   const secondRow = sorted[1];
                   const leaderName = leaderRow
-                    ? getHouseById(leaderRow.houseKey)?.name || leaderRow.name || leaderRow.houseKey
+                    ? leaderRow.name || houseMetaById[leaderRow.houseKey]?.name || getHouseById(leaderRow.houseKey)?.name || leaderRow.houseKey
                     : "—";
                   const leaderColor = leaderRow
-                    ? leaderRow.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+                    ? leaderRow.color || houseMetaById[leaderRow.houseKey]?.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
                     : "#2563eb";
                   const leaderMargin =
                     leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
                   const prevLeaderName =
                     currentPeriod === "week"
                       ? (prevWeekLeaderRef.current
-                        ? getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+                        ? houseMetaById[prevWeekLeaderRef.current]?.name || getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
                         : null)
                       : (prevTermLeaderRef.current
-                        ? getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+                        ? houseMetaById[prevTermLeaderRef.current]?.name || getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
                         : null);
                   const chartData = currentRows.map((row) => ({
-                    name: getHouseById(row.houseKey)?.name || row.name || row.houseKey,
+                    name: row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey,
                     points: row.points || 0,
-                    color: row.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+                    color: row.color || houseMetaById[row.houseKey]?.color || getHouseById(row.houseKey)?.color || "#94a3b8",
                   }));
 
                   await exportAssemblyDeck({
@@ -2775,10 +2803,10 @@ export function ScoreboardContent({
                     totalValues,
                     houses: sortedHouses.map((id) => ({
                       id,
-                      name: HOUSES[id].name,
+                      name: houseMetaById[id]?.name || getHouseById(id)?.name || id,
                       data: valuesByHouse[id] || [],
                       caption: valueCaptions.houses?.[id],
-                      color: HOUSES[id].color,
+                      color: houseMetaById[id]?.color || getHouseById(id)?.color || "#94a3b8",
                     })),
                     colours: categoryColorMap,
                   });
@@ -2888,7 +2916,11 @@ export function ScoreboardContent({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
               {sortedHouses.map((houseId) => {
-                const house = HOUSES[houseId];
+                const house = houseMetaById[houseId] || getHouseById(houseId) || {
+                  name: houseId,
+                  color: "#94a3b8",
+                  icon: null,
+                };
                 const data = normaliseValues(valuesByHouse[houseId] || []);
                 const total = data.reduce((s, d) => s + d.points, 0);
 
@@ -3063,7 +3095,9 @@ export function ScoreboardContent({
               <tbody className="divide-y divide-slate-100">
                 {submissions.map((entry) => {
                   const houseId = entry.house_id || entry.houseId;
-                  const houseMeta = HOUSES[resolveHouseKey(houseId)];
+                  const houseMeta =
+                    houseMetaById[String(houseId)] ||
+                    HOUSES[resolveHouseKey(houseId)];
                   const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
                   const HouseIcon =
                     ICON_MAP[String(entry.house_icon || "").toLowerCase()] ||
