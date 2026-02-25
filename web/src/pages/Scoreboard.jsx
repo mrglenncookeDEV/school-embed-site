@@ -3003,15 +3003,15 @@ export function ScoreboardContent({
                     {(captionsByHouse[houseId] || houseDelta[houseId] !== undefined) && (
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-slate-600">
-                          {data.length === 0 ? "No data" : (captionsByHouse[houseId] || "No data")}
+                          {total === 0 ? "No points yet" : (captionsByHouse[houseId] || `${total} pts recorded`)}
                         </p>
                         <TrendArrow delta={houseDelta[houseId]} />
                       </div>
                     )}
                     {deepDive && (
                       <ul className="text-xs text-slate-500 mt-1 space-y-1">
-                        {data.length === 0 ? (
-                          <li>No data</li>
+                        {total === 0 ? (
+                          <li>No points yet</li>
                         ) : (
                           data.map((d) => (
                             <li key={d.category}>
@@ -3046,15 +3046,15 @@ export function ScoreboardContent({
                       {(captionsByYear?.[year] || yearDelta[year] !== undefined) && (
                         <div className="flex items-center gap-2">
                           <p className="text-xs text-slate-600">
-                            {data.length === 0 ? "No data" : (captionsByYear?.[year] || "No data")}
+                            {total === 0 ? "No points yet" : (captionsByYear?.[year] || `${total} pts recorded`)}
                           </p>
                           <TrendArrow delta={yearDelta[year]} />
                         </div>
                       )}
                       {deepDive && (
                         <ul className="text-xs text-slate-500 mt-1 space-y-1">
-                          {data.length === 0 ? (
-                            <li>No data</li>
+                          {total === 0 ? (
+                            <li>No points yet</li>
                           ) : (
                             data.map((d) => (
                               <li key={d.category}>
