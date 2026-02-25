@@ -16,7 +16,7 @@ const initialForm = {
   submittedByEmail: "",
 };
 
-export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
+export default function TeacherSubmit({ entry, onSuccess } = {}) {
   const [form, setForm] = useState(initialForm);
   const [classes, setClasses] = useState([]);
   const [houses, setHouses] = useState([]);
@@ -259,22 +259,6 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
             </p>
           )}
         </div>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full border border-red-900/80 text-white transition hover:brightness-110 active:translate-y-[1px]"
-            style={{
-              background:
-                "linear-gradient(165deg, rgba(220,38,38,0.96) 0%, rgba(185,28,28,0.98) 100%)",
-              boxShadow:
-                "inset 0 1px 0 rgba(254,202,202,0.45), inset 0 -1px 0 rgba(127,29,29,0.9), 0 2px 4px rgba(127,29,29,0.3)",
-            }}
-          >
-            <span className="text-base font-bold leading-none">×</span>
-          </button>
-        )}
       </div>
 
       <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
