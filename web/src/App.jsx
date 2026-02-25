@@ -126,26 +126,49 @@ function SlideUpModal({ open, onClose, children }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center pb-[env(safe-area-inset-bottom)]">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" onClick={onClose} />
       <div
-        className="relative z-10 flex w-[95vw] max-w-[720px] flex-col items-stretch rounded-t-[32px] bg-[#1f2aa6] shadow-2xl sm:w-[60vw] transition-transform duration-500 ease-out animate-[modalIn_520ms_ease-out]"
+        className="relative z-10 flex w-[95vw] max-w-[720px] flex-col items-stretch overflow-hidden rounded-t-[32px] border border-[#1f2aa6] bg-[#f6edd8] shadow-2xl sm:w-[60vw] transition-transform duration-500 ease-out animate-[modalIn_520ms_ease-out]"
         style={{
           height: `min(${modalHeight}dvh, ${modalHeight}vh)`,
           maxHeight: "calc(100dvh - env(safe-area-inset-top))",
+          backgroundImage:
+            "repeating-linear-gradient(18deg, rgba(120,88,34,0.08) 0px, rgba(120,88,34,0.08) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(108deg, rgba(255,255,255,0.24) 0px, rgba(255,255,255,0.24) 1px, transparent 1px, transparent 7px), radial-gradient(circle at 20% 14%, rgba(255,255,255,0.6), transparent 42%), radial-gradient(circle at 86% 84%, rgba(168,132,68,0.18), transparent 40%), linear-gradient(140deg, #f6edd8 0%, #f8f0df 44%, #ebddbf 100%)",
+          backgroundSize: "6px 6px, 8px 8px, 100% 100%, 100% 100%, 100% 100%",
+          boxShadow:
+            "0 24px 60px rgba(15,23,42,0.42), inset 0 0 0 1px rgba(255,255,255,0.34), inset 0 0 38px rgba(130,96,44,0.18)",
         }}
         onClick={(event) => event.stopPropagation()}
       >
         <div
-          className="flex items-center justify-center pt-2"
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(99,77,39,0.16) 0.7px, transparent 0.8px), radial-gradient(rgba(255,255,255,0.35) 0.7px, transparent 0.8px)",
+            backgroundSize: "8px 8px, 11px 11px",
+            backgroundPosition: "0 0, 3px 4px",
+            opacity: 0.42,
+            mixBlendMode: "multiply",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 top-0 z-20 flex items-center justify-center px-6 py-4"
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeEnd}
           onPointerCancel={handleResizeEnd}
         >
           <div
-            className="h-1.5 w-12 rounded-full bg-white/70 shadow-[inset_0_-1px_2px_rgba(0,0,0,0.25)] cursor-ns-resize"
+            className="h-1.5 w-12 rounded-full border border-slate-500/70 cursor-ns-resize"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(248,250,252,0.95) 0%, rgba(148,163,184,0.88) 52%, rgba(71,85,105,0.92) 100%)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(15,23,42,0.55), 0 1px 2px rgba(2,6,23,0.35)",
+            }}
             aria-hidden="true"
           />
         </div>
-        <div className="flex h-full overflow-y-auto p-3 pb-0 sm:p-4 sm:pb-0">{children}</div>
+        <div className="relative z-10 h-full w-full overflow-y-auto pt-12">{children}</div>
       </div>
     </div>,
     document.body

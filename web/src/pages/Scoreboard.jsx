@@ -2320,27 +2320,35 @@ export function ScoreboardContent({
               {/* Weekly Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/30 ring-1 ring-black/20 mx-1"
+                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/70 ring-1 ring-black/30 mx-1 backdrop-blur-sm"
                   style={{
-                    background: `linear-gradient(135deg, ${WEEK_TITLE_COLOR}, #0f172a)`,
+                    background: `linear-gradient(135deg, ${WEEK_TITLE_COLOR}8f, rgba(15,23,42,0.62))`,
                     padding: "28px",
                     boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -8px 16px rgba(0,0,0,0.25)",
+                      "inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.38), inset 0 -12px 20px rgba(0,0,0,0.18)",
                   }}
                 >
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background:
+                        "linear-gradient(120deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 34%, rgba(255,255,255,0) 64%)",
+                    }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-black/14" />
                   <h2
-                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    className="relative z-10 highlight-title text-lg uppercase tracking-[0.4em] text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]"
                     style={PLAYFUL_FONT}
                   >
                     This week total
                   </h2>
-                  <p className="text-4xl font-semibold drop-shadow-sm" style={PLAYFUL_FONT}>
+                  <p className="relative z-10 text-4xl font-semibold text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]" style={PLAYFUL_FONT}>
                     {thisWeekTotal} pts
                   </p>
-                  <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
+                  <p className="relative z-10 text-sm text-white/95 drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" style={PLAYFUL_FONT}>
                     Keep adding points before Friday 14:25 GMT.
                   </p>
-                  <p className="text-xs text-slate-200 mt-1 leading-tight truncate">
+                  <p className="relative z-10 text-xs text-white/90 mt-1 leading-tight truncate drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">
                     {weekSummaryLine}
                   </p>
                 </div>
@@ -2543,27 +2551,35 @@ export function ScoreboardContent({
               {/* Term Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/30 ring-1 ring-black/20 mx-1"
+                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/70 ring-1 ring-black/30 mx-1 backdrop-blur-sm"
                   style={{
-                    background: "linear-gradient(135deg, #dc2626, #111827)",
+                    background: "linear-gradient(135deg, rgba(220,38,38,0.56), rgba(17,24,39,0.62))",
                     padding: "28px",
                     boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -8px 16px rgba(0,0,0,0.25)",
+                      "inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.38), inset 0 -12px 20px rgba(0,0,0,0.18)",
                   }}
                 >
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background:
+                        "linear-gradient(120deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 34%, rgba(255,255,255,0) 64%)",
+                    }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-black/14" />
                   <h2
-                    className="highlight-title text-lg uppercase tracking-[0.4em]"
+                    className="relative z-10 highlight-title text-lg uppercase tracking-[0.4em] text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]"
                     style={PLAYFUL_FONT}
                   >
                     Current Term Total
                   </h2>
-                  <p className="text-3xl font-semibold drop-shadow-sm" style={PLAYFUL_FONT}>
+                  <p className="relative z-10 text-3xl font-semibold text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]" style={PLAYFUL_FONT}>
                     {termTotalPoints} pts
                   </p>
-                  <p className="text-sm text-white/80" style={PLAYFUL_FONT}>
+                  <p className="relative z-10 text-sm text-white/95 drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" style={PLAYFUL_FONT}>
                     Points earned so far this term.
                   </p>
-                  <p className="text-xs text-slate-200 mt-1 leading-tight truncate">
+                  <p className="relative z-10 text-xs text-white/90 mt-1 leading-tight truncate drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">
                     {termSummaryLine}
                   </p>
                 </div>

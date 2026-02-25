@@ -92,8 +92,8 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
   const formDisabled = deadlinePassed;
   const inputClass =
     "w-full rounded-2xl border border-slate-700 px-3 py-2 text-slate-900 focus:border-slate-500 focus:outline-none";
-  const inputFill = formDisabled ? "bg-slate-200 text-slate-500" : "bg-yellow-50";
-  const compactInputClass = `border border-slate-700 rounded-md px-3 py-2 text-slate-900 ${formDisabled ? "bg-slate-200 text-slate-500" : "bg-yellow-50"}`;
+  const inputFill = formDisabled ? "bg-slate-100 text-slate-500" : "bg-white";
+  const compactInputClass = `border border-slate-700 rounded-md px-3 py-2 text-slate-900 ${formDisabled ? "bg-slate-100 text-slate-500" : "bg-white"}`;
 
   useEffect(() => {
     if (!entry) {
@@ -232,8 +232,10 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
   };
 
   return (
-    <section className="flex w-full flex-1 flex-col gap-2 pb-0">
-      <div className="relative flex flex-wrap items-center gap-3 rounded-3xl bg-[#1f2aa6] px-4 py-3 text-white">
+    <section className="flex min-h-full w-full flex-col pb-0">
+      <div
+        className="relative flex w-full shrink-0 flex-wrap items-center gap-3 bg-[#1f2aa6] px-6 py-4 text-white"
+      >
         <img
           src={`${import.meta.env.BASE_URL}favicon.png`}
           alt="House Points logo"
@@ -261,29 +263,46 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 rounded-full px-3 py-1 text-xs font-semibold uppercase text-white transition bg-[linear-gradient(180deg,#fecaca_0%,#ef4444_55%,#b91c1c_100%)] hover:brightness-105 active:translate-y-[1px]"
+            aria-label="Close"
+            className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full border border-red-900/80 text-white transition hover:brightness-110 active:translate-y-[1px]"
+            style={{
+              background:
+                "linear-gradient(165deg, rgba(220,38,38,0.96) 0%, rgba(185,28,28,0.98) 100%)",
+              boxShadow:
+                "inset 0 1px 0 rgba(254,202,202,0.45), inset 0 -1px 0 rgba(127,29,29,0.9), 0 2px 4px rgba(127,29,29,0.3)",
+            }}
           >
-            Close
+            <span className="text-base font-bold leading-none">×</span>
           </button>
         )}
       </div>
 
-      {status.message && (
-        <div
-          className={`rounded-2xl px-4 py-3 text-sm ${status.type === "success"
-            ? "bg-emerald-50 text-emerald-800"
-            : "bg-rose-50 text-rose-800"
-            }`}
-        >
-          {status.message}
-        </div>
-      )}
+      <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
+        {status.message && (
+          <div
+            className={`rounded-2xl px-4 py-3 text-sm ${status.type === "success"
+              ? "bg-emerald-50 text-emerald-800"
+              : "bg-rose-50 text-rose-800"
+              }`}
+          >
+            {status.message}
+          </div>
+        )}
 
-      <div className="flex flex-1 flex-col rounded-3xl rounded-b-none border border-slate-200 bg-white p-4 shadow-sm">
-        {loading ? (
-          <p className="text-sm text-slate-500">Loading form…</p>
-        ) : (
-          <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+        <div
+          className="mt-2 flex flex-1 flex-col rounded-3xl rounded-b-none border border-[#3b5bdb]/55 p-4 shadow-sm ring-1 ring-[#1d4ed8]/35"
+          style={{
+            backgroundImage:
+              "radial-gradient(rgba(71,85,105,0.05) 0.5px, transparent 0.65px), linear-gradient(135deg, #fbfcfe 0%, #f3f6fb 56%, #e8edf5 100%)",
+            backgroundSize: "11px 11px, 100% 100%",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.78), inset 0 -1px 0 rgba(30,64,175,0.22), 0 0 0 1px rgba(59,130,246,0.18)",
+          }}
+        >
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading form…</p>
+          ) : (
+            <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm font-semibold text-slate-700">
                 Class
@@ -428,17 +447,18 @@ export default function TeacherSubmit({ entry, onSuccess, onClose } = {}) {
             {status.type === "error" && (
               <p className="text-xs text-rose-600">{status.message}</p>
             )}
-          </form>
+            </form>
+          )}
+        </div>
+
+        {form.houseId && housesById[form.houseId] && (
+          <div className="mt-2 rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900/80 to-slate-900/40 p-5 text-white shadow-lg">
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-200">Current House</p>
+            <p className="text-2xl font-semibold">{housesById[form.houseId].name}</p>
+            <p className="text-sm text-slate-200">Stay focused, submit by Friday 14:25 GMT.</p>
+          </div>
         )}
       </div>
-
-      {form.houseId && housesById[form.houseId] && (
-        <div className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900/80 to-slate-900/40 p-5 text-white shadow-lg">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-200">Current House</p>
-          <p className="text-2xl font-semibold">{housesById[form.houseId].name}</p>
-          <p className="text-sm text-slate-200">Stay focused, submit by Friday 14:25 GMT.</p>
-        </div>
-      )}
     </section>
   );
 }
