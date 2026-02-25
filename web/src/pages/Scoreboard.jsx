@@ -53,8 +53,17 @@ function generateSummaryLine({
   prevLeader,
   leaderMargin,
   strongestDeltaHouse,
+  isTieForLead = false,
+  tiedLeaderNames = [],
   periodLabel, // "week" | "term"
 }) {
+  if (isTieForLead) {
+    if (tiedLeaderNames.length > 1) {
+      return `Houses ${formatTiedHouseNames(tiedLeaderNames)} are tied at the top this ${periodLabel}.`;
+    }
+    return `It is an all-out draw at the top this ${periodLabel}.`;
+  }
+
   if (leader && prevLeader && leader !== prevLeader) {
     return `${leader} takes the lead this ${periodLabel} after a strong performance.`;
   }
@@ -1824,6 +1833,10 @@ export function ScoreboardContent({
     const sorted = [...weekRows].sort((a, b) => (b.points || 0) - (a.points || 0));
     const leader = sorted[0];
     const second = sorted[1];
+    const topPoints = leader ? Number(leader.points || 0) : null;
+    const tiedLeaders = topPoints === null
+      ? []
+      : sorted.filter((row) => Number(row.points || 0) === topPoints);
     const leaderName = leader
       ? (leader.name || houseMetaById[leader.houseKey]?.name || getHouseById(leader.houseKey)?.name || leader.houseKey)
       : null;
@@ -1840,6 +1853,10 @@ export function ScoreboardContent({
       prevLeader: prevLeaderName,
       leaderMargin,
       strongestDeltaHouse,
+      isTieForLead: tiedLeaders.length > 1,
+      tiedLeaderNames: tiedLeaders.map(
+        (row) => row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey
+      ),
       periodLabel: "week",
     });
   }, [weekRows, houseDelta, houseMetaById]);
@@ -1848,6 +1865,10 @@ export function ScoreboardContent({
     const sorted = [...termRows].sort((a, b) => (b.points || 0) - (a.points || 0));
     const leader = sorted[0];
     const second = sorted[1];
+    const topPoints = leader ? Number(leader.points || 0) : null;
+    const tiedLeaders = topPoints === null
+      ? []
+      : sorted.filter((row) => Number(row.points || 0) === topPoints);
     const leaderName = leader
       ? (leader.name || houseMetaById[leader.houseKey]?.name || getHouseById(leader.houseKey)?.name || leader.houseKey)
       : null;
@@ -1864,6 +1885,10 @@ export function ScoreboardContent({
       prevLeader: prevLeaderName,
       leaderMargin,
       strongestDeltaHouse,
+      isTieForLead: tiedLeaders.length > 1,
+      tiedLeaderNames: tiedLeaders.map(
+        (row) => row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey
+      ),
       periodLabel: "term",
     });
   }, [termRows, houseDelta, houseMetaById]);
