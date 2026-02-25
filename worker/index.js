@@ -23,6 +23,9 @@ async function sendWeeklyStaffReport(env) {
     try {
       await sendEmail({
         to: email,
+        fromName: "HousePoint Reminders",
+        fromEmail: env.REMINDER_FROM_EMAIL || "reminders@housepoint.local",
+        replyTo: env.REMINDER_REPLY_TO || env.REMINDER_FROM_EMAIL || "reminders@housepoint.local",
         subject: "Weekly Values Report",
         body: "Please find attached this week’s values report.",
         attachment: {
