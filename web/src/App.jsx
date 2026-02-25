@@ -310,11 +310,13 @@ function HoverRouteLink({ to, label, icon: Icon, active = false }) {
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef(null);
+  const lastNonTeacherPathRef = useRef("/scoreboard");
   const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
   const relativePath = location.pathname.startsWith(basePath)
     ? location.pathname.slice(basePath.length) || "/"
@@ -370,7 +372,10 @@ function AppContent() {
   const closeTeacherSubmit = useCallback(() => {
     setTeacherModalOpen(false);
     setEditingEntry(null);
-  }, []);
+    if (relativePath === "/teacher") {
+      navigate(lastNonTeacherPathRef.current || "/scoreboard", { replace: true });
+    }
+  }, [navigate, relativePath]);
 
   const navItems = [
     { label: "Scoreboard", to: "/scoreboard", end: true, icon: Presentation },
@@ -383,6 +388,12 @@ function AppContent() {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
+  useEffect(() => {
+    if (relativePath !== "/teacher") {
+      lastNonTeacherPathRef.current = relativePath;
+    }
+  }, [relativePath]);
+
   useEffect(() => {
     if (location.pathname === "/teacher") {
       // Defer to next tick to avoid synchronous setState inside effect
