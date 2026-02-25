@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter as Router, NavLink, Route, Routes, useLocation, Navigate } from "react-router-dom";
-import { Presentation, Printer, Send, UserStar, Shield, ChevronDown, ChartPie } from "lucide-react";
+import { BrowserRouter as Router, Route, Routes, useLocation, Navigate, useNavigate } from "react-router-dom";
+import { Presentation, Send, UserStar, ChartPie } from "lucide-react";
 
 const PLAYFUL_FONT = '"Permanent Marker", "Marker Felt", "Kalam", cursive';
 
@@ -243,6 +243,71 @@ function ReportViewer({ url, fallbackUrl, extraUrls = [], title }) {
   );
 }
 
+function HoverRouteLink({ to, label, icon: Icon, active = false }) {
+  const navigate = useNavigate();
+  const [isHovering, setIsHovering] = useState(false);
+  const hoverTimerRef = useRef(null);
+  const HOVER_NAV_DELAY_MS = 1400;
+
+  const clearHoverTimer = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearHoverTimer, [clearHoverTimer]);
+
+  const handleNavigate = useCallback(() => {
+    navigate(to);
+  }, [navigate, to]);
+
+  const handleMouseEnter = () => {
+    if (active) {
+      setIsHovering(true);
+      return;
+    }
+    setIsHovering(true);
+    clearHoverTimer();
+    hoverTimerRef.current = setTimeout(() => {
+      handleNavigate();
+    }, HOVER_NAV_DELAY_MS);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovering(false);
+    clearHoverTimer();
+  };
+
+  const filled = isHovering || active;
+
+  return (
+    <button
+      type="button"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleNavigate}
+      className="group relative flex w-full items-center justify-center overflow-hidden rounded-full px-4 py-3"
+      aria-current={active ? "page" : undefined}
+    >
+      <span
+        className={`pointer-events-none absolute inset-0 rounded-full bg-white origin-left transition-transform duration-[1400ms] ease-out ${
+          filled ? "scale-x-100" : "scale-x-0"
+        }`}
+        aria-hidden="true"
+      />
+      <span
+        className={`relative z-10 flex items-center gap-2 whitespace-nowrap text-xs font-bold uppercase tracking-wide transition-colors duration-[1400ms] ${
+          filled ? "text-black" : "text-white"
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </span>
+    </button>
+  );
+}
+
 function AppContent() {
   const location = useLocation();
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
@@ -309,14 +374,9 @@ function AppContent() {
 
   const navItems = [
     { label: "Scoreboard", to: "/scoreboard", end: true, icon: Presentation },
-    { label: "Submit Points", action: () => openTeacherSubmit(null), icon: Send },
+    { label: "Submit Points", to: "/teacher", icon: Send },
     { label: "Admin", to: "/admin", icon: UserStar },
   ];
-
-  // Common styles for the pill buttons to ensure perfect equality and Apple/Android look
-  const pillBaseClass =
-    "flex w-full items-center justify-center gap-2 rounded-full bg-slate-100 px-4 py-3 shadow-sm transition-all hover:scale-[1.02] hover:bg-slate-200 hover:shadow-md active:scale-95";
-  const pillTextClass = "text-xs font-bold tracking-wide uppercase text-slate-700 whitespace-nowrap";
 
   useEffect(() => {
     const handleClick = () => setReportsOpen(false);
@@ -378,36 +438,15 @@ function AppContent() {
             {!isPublicRoute && (
               <nav className="grid w-full grid-cols-2 gap-2 mt-4 sm:mt-0 sm:w-auto sm:ml-auto sm:grid-cols-4">
                 {navItems.map((item) => {
-                  const Icon = item.icon;
-                  if (item.action) {
-                    return (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={item.action}
-                        className={pillBaseClass}
-                      >
-                        <Icon className="w-4 h-4 text-slate-800" />
-                        <span className={pillTextClass}>
-                          {item.label}
-                        </span>
-                      </button>
-                    );
-                  }
+                  const isActive = item.end ? relativePath === item.to : relativePath.startsWith(item.to);
                   return (
-                    <NavLink
+                    <HoverRouteLink
                       key={item.to}
                       to={item.to}
-                      end={item.end}
-                      className={({ isActive }) =>
-                        `${pillBaseClass} ${isActive ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-[#1f2aa6]" : ""}`
-                      }
-                    >
-                      <Icon className="w-4 h-4 text-slate-800" />
-                      <span className={pillTextClass}>
-                        {item.label}
-                      </span>
-                    </NavLink>
+                      label={item.label}
+                      icon={item.icon}
+                      active={isActive}
+                    />
                   );
                 })}
 
@@ -420,10 +459,14 @@ function AppContent() {
                   <button
                     type="button"
                     onMouseEnter={() => setReportsOpen(true)}
-                    className={pillBaseClass}
+                    className="group relative flex w-full items-center justify-center overflow-hidden rounded-full px-4 py-3"
                   >
-                    <ChartPie className="w-4 h-4 text-slate-800" />
-                    <span className={pillTextClass}>
+                    <span
+                      className="pointer-events-none absolute inset-0 rounded-full bg-white origin-left scale-x-0 transition-transform duration-[1400ms] ease-out group-hover:scale-x-100"
+                      aria-hidden="true"
+                    />
+                    <span className="relative z-10 flex items-center gap-2 whitespace-nowrap text-xs font-bold uppercase tracking-wide text-white transition-colors duration-[1400ms] group-hover:text-black">
+                      <ChartPie className="w-4 h-4" />
                       Reports
                     </span>
                   </button>

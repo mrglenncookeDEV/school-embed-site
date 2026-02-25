@@ -2320,22 +2320,12 @@ export function ScoreboardContent({
               {/* Weekly Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/70 ring-1 ring-black/30 mx-1 backdrop-blur-sm"
+                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border-2 border-slate-900 mx-1"
                   style={{
-                    background: `linear-gradient(135deg, ${WEEK_TITLE_COLOR}8f, rgba(15,23,42,0.62))`,
+                    background: "#4169E1",
                     padding: "28px",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.38), inset 0 -12px 20px rgba(0,0,0,0.18)",
                   }}
                 >
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{
-                      background:
-                        "linear-gradient(120deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 34%, rgba(255,255,255,0) 64%)",
-                    }}
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-black/14" />
                   <h2
                     className="relative z-10 highlight-title text-lg uppercase tracking-[0.4em] text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]"
                     style={PLAYFUL_FONT}
@@ -2551,22 +2541,12 @@ export function ScoreboardContent({
               {/* Term Total Tile */}
               {showTotalsPanel && (
                 <div
-                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border border-white/70 ring-1 ring-black/30 mx-1 backdrop-blur-sm"
+                  className="relative overflow-hidden rounded-3xl text-white text-center flex flex-col items-center gap-3 border-2 border-slate-900 mx-1"
                   style={{
-                    background: "linear-gradient(135deg, rgba(220,38,38,0.56), rgba(17,24,39,0.62))",
+                    background: "#dc2626",
                     padding: "28px",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.56), inset 0 -1px 0 rgba(0,0,0,0.38), inset 0 -12px 20px rgba(0,0,0,0.18)",
                   }}
                 >
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{
-                      background:
-                        "linear-gradient(120deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 34%, rgba(255,255,255,0) 64%)",
-                    }}
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-black/14" />
                   <h2
                     className="relative z-10 highlight-title text-lg uppercase tracking-[0.4em] text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.45)]"
                     style={PLAYFUL_FONT}
