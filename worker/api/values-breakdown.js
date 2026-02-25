@@ -5,6 +5,7 @@ const json = (data, status = 200) =>
   });
 
 const formatDate = (date) => date.toISOString().split("T")[0];
+const getCurrentTermDate = () => formatDate(getLondonDate());
 
 const getLondonDate = () => {
   const formatter = new Intl.DateTimeFormat("en-GB", {
@@ -76,8 +77,16 @@ const ensureWeek = async (db, weekStart) => {
 const getPeriodRange = async (period, db) => {
   if (period === "term") {
     try {
+      const todayIso = getCurrentTermDate();
       const { results } = await db
-        .prepare(`SELECT start_date, end_date FROM terms WHERE is_active = 1 LIMIT 1`)
+        .prepare(
+          `SELECT start_date, end_date
+           FROM terms
+           WHERE start_date <= ? AND end_date >= ?
+           ORDER BY start_date DESC, id DESC
+           LIMIT 1`
+        )
+        .bind(todayIso, todayIso)
         .all();
       const term = results?.[0];
       if (term?.start_date && term?.end_date) {

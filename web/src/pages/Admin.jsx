@@ -119,7 +119,6 @@ export default function Admin() {
     name: "",
     start_date: "",
     end_date: "",
-    is_active: false,
   });
   const [confirmDeleteTermId, setConfirmDeleteTermId] = useState(null);
   const [isSavingTerm, setIsSavingTerm] = useState(false);
@@ -558,7 +557,7 @@ export default function Admin() {
       setActionMessage(editingTerm ? "Term updated" : "Term created");
       setIsTermModalOpen(false);
       setEditingTerm(null);
-      setTermForm({ name: "", start_date: "", end_date: "", is_active: false });
+      setTermForm({ name: "", start_date: "", end_date: "" });
       await loadTerms();
       await loadAudit();
     } catch (err) {
@@ -592,7 +591,6 @@ export default function Admin() {
         name: term.name,
         start_date: term.start_date,
         end_date: term.end_date,
-        is_active: Boolean(term.is_active),
       });
     } else {
       setEditingTerm(null);
@@ -600,7 +598,6 @@ export default function Admin() {
         name: "",
         start_date: "",
         end_date: "",
-        is_active: false,
       });
     }
     setIsTermModalOpen(true);
@@ -1059,7 +1056,7 @@ export default function Admin() {
 
           <CollapsibleSection
             title="Manage Term Dates"
-            subtitle="Set up school terms and active periods"
+            subtitle="Set up school terms. Active term is selected automatically by today’s date."
             action={
               <button
                 onClick={() => openTermModal()}
@@ -1476,19 +1473,6 @@ export default function Admin() {
                       className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900"
                     />
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="termIsActive"
-                    checked={termForm.is_active}
-                    onChange={(e) => setTermForm({ ...termForm, is_active: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                  />
-                  <label htmlFor="termIsActive" className="text-sm text-slate-700">
-                    Set as current active term
-                  </label>
                 </div>
 
                 {error && <p className="text-xs text-rose-600 font-medium">{error}</p>}

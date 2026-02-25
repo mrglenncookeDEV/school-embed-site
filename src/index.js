@@ -343,8 +343,17 @@ async function fetchScoreboard(db, weekId) {
 }
 
 async function fetchActiveTerm(db) {
+  const todayIso = formatDate(getLondonDate());
   try {
-    const { results } = await db.prepare(`SELECT * FROM terms WHERE is_active = 1 LIMIT 1`).all();
+    const { results } = await db
+      .prepare(
+        `SELECT * FROM terms
+         WHERE start_date <= ? AND end_date >= ?
+         ORDER BY start_date DESC, id DESC
+         LIMIT 1`
+      )
+      .bind(todayIso, todayIso)
+      .all();
     return results[0] || null;
   } catch (error) {
     if (error.message && error.message.includes("no such table")) {
@@ -843,7 +852,30 @@ async function handleEntryDelete(request, db, entryId) {
 }
 
 async function fetchTerms(db) {
-  const { results } = await db.prepare("SELECT * FROM terms ORDER BY start_date DESC").all();
+  const todayIso = formatDate(getLondonDate());
+  const { results } = await db
+    .prepare(
+      `SELECT
+        id,
+        name,
+        start_date,
+        end_date,
+        created_at,
+        CASE
+          WHEN id = (
+            SELECT id
+            FROM terms
+            WHERE start_date <= ? AND end_date >= ?
+            ORDER BY start_date DESC, id DESC
+            LIMIT 1
+          ) THEN 1
+          ELSE 0
+        END AS is_active
+      FROM terms
+      ORDER BY start_date DESC`
+    )
+    .bind(todayIso, todayIso)
+    .all();
   return results;
 }
 
@@ -855,23 +887,17 @@ async function handleTermsPost(request, db) {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const { name, start_date, end_date, is_active } = payload;
+  const { name, start_date, end_date } = payload;
   if (!name || !start_date || !end_date) {
     return json({ error: "Name, start_date, and end_date are required" }, 400);
   }
 
-  const isActive = is_active ? 1 : 0;
-
   try {
-    if (isActive) {
-      await db.prepare("UPDATE terms SET is_active = 0").run();
-    }
-
     const result = await db
       .prepare(
         "INSERT INTO terms (name, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
       )
-      .bind(name, start_date, end_date, isActive)
+      .bind(name, start_date, end_date, 0)
       .run();
 
     await logAudit(db, {
@@ -879,7 +905,7 @@ async function handleTermsPost(request, db) {
       actorEmail: "admin@school.local",
       targetType: "term",
       targetId: result.meta.last_row_id,
-      meta: { name, start_date, end_date, is_active: isActive },
+      meta: { name, start_date, end_date },
     });
 
     return json({ success: true, id: result.meta.last_row_id });
@@ -896,23 +922,17 @@ async function handleTermsPut(request, db, termId) {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const { name, start_date, end_date, is_active } = payload;
+  const { name, start_date, end_date } = payload;
   if (!name || !start_date || !end_date) {
     return json({ error: "Name, start_date, and end_date are required" }, 400);
   }
 
-  const isActive = is_active ? 1 : 0;
-
   try {
-    if (isActive) {
-      await db.prepare("UPDATE terms SET is_active = 0 WHERE id != ?").bind(termId).run();
-    }
-
     await db
       .prepare(
         "UPDATE terms SET name = ?, start_date = ?, end_date = ?, is_active = ? WHERE id = ?"
       )
-      .bind(name, start_date, end_date, isActive, termId)
+      .bind(name, start_date, end_date, 0, termId)
       .run();
 
     await logAudit(db, {
@@ -920,7 +940,7 @@ async function handleTermsPut(request, db, termId) {
       actorEmail: "admin@school.local",
       targetType: "term",
       targetId: termId,
-      meta: { name, start_date, end_date, is_active: isActive },
+      meta: { name, start_date, end_date },
     });
 
     return json({ success: true });
