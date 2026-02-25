@@ -825,11 +825,11 @@ export default function Admin() {
                 {filteredEntries.map((entry) => {
                   const houseId = entry.house_id || entry.houseId;
                   const houseMeta = getHouseById(houseId);
-                  const houseColor = houseMeta?.color ?? entry.house_color ?? "#94a3b8";
+                  const houseColor = entry.house_color ?? houseMeta?.color ?? "#94a3b8";
                   const HouseIcon =
                     resolveAvailableIcon(entry.house_icon || entry.house_name).icon ||
                     houseMeta?.icon;
-                  const houseLabel = houseMeta?.name ?? entry.house_name;
+                  const houseLabel = entry.house_name ?? houseMeta?.name ?? houseId;
                   const teacherLabel = entry.teacherDisplayName || entry.submitted_by_email || "—";
                   const submittedByLabel = `${entry.class_name}${teacherLabel ? ` · ${teacherLabel}` : ""}`;
                   return (

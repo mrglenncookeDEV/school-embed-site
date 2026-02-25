@@ -1109,12 +1109,26 @@ export function ScoreboardContent({
   const renderHouseTooltip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
     const dataPoint = payload[0]?.payload;
-    const rawHouse = dataPoint?.houseKey ?? dataPoint?.house_id;
-    const houseId = resolveHouseKey(rawHouse) || String(rawHouse ?? "");
-    const data = normaliseValues(valuesByHouse[houseId] || []);
+    const rawHouse = dataPoint?.houseKey ?? dataPoint?.house_id ?? "";
+    const rawHouseId = String(rawHouse).trim();
+    const houseId = resolveValuesHouseId(rawHouseId);
+    const data = normaliseValues(
+      valuesByHouse[houseId] || valuesByHouse[rawHouseId] || []
+    );
     const total = data.reduce((sum, d) => sum + d.points, 0);
     const items = [...data].sort((a, b) => (b.points || 0) - (a.points || 0));
-    const houseName = (getHouseById(houseId)?.name || dataPoint?.house_name || dataPoint?.name || label || "").toString();
+    const houseMeta =
+      houseMetaById[rawHouseId] ||
+      houseMetaById[houseId] ||
+      getHouseById(rawHouseId) ||
+      getHouseById(houseId);
+    const houseName = (
+      dataPoint?.house_name ||
+      dataPoint?.name ||
+      houseMeta?.name ||
+      label ||
+      ""
+    ).toString();
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md min-w-[180px]">
         <div className="font-semibold text-base" style={PLAYFUL_FONT}>
@@ -1158,7 +1172,12 @@ export function ScoreboardContent({
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {items.length === 0 && <li className="text-slate-400">No house data</li>}
           {items.map(([houseId, pts]) => {
-            const house = houseMetaById[houseId] || getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            const resolvedHouseId = resolveValuesHouseId(houseId);
+            const house =
+              houseMetaById[houseId] ||
+              houseMetaById[resolvedHouseId] ||
+              getHouseById(houseId) ||
+              getHouseById(resolvedHouseId) || { name: houseId, color: "#64748b" };
             return (
               <li key={houseId} className="flex items-center gap-2">
                 <span
@@ -1192,7 +1211,12 @@ export function ScoreboardContent({
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {items.length === 0 && <li className="text-slate-400">No house data</li>}
           {items.map(([houseId, pts]) => {
-            const house = houseMetaById[houseId] || getHouseById(houseId) || { name: houseId, color: "#64748b" };
+            const resolvedHouseId = resolveValuesHouseId(houseId);
+            const house =
+              houseMetaById[houseId] ||
+              houseMetaById[resolvedHouseId] ||
+              getHouseById(houseId) ||
+              getHouseById(resolvedHouseId) || { name: houseId, color: "#64748b" };
             return (
               <li key={houseId} className="flex items-center gap-2">
                 <span
@@ -1478,6 +1502,19 @@ export function ScoreboardContent({
     });
     return map;
   }, [weekRows, termRows]);
+  const resolveValuesHouseId = useCallback(
+    (value) => {
+      if (value == null) return null;
+      const rawId = String(value).trim();
+      const canonicalId = resolveHouseKey(value) || null;
+
+      if (rawId && houseMetaById[rawId]) return rawId;
+      if (canonicalId && houseMetaById[canonicalId]) return canonicalId;
+      if (rawId) return rawId;
+      return canonicalId;
+    },
+    [houseMetaById]
+  );
   const termTotalPoints = useMemo(
     () => termRows.reduce((acc, row) => acc + (row.points ?? 0), 0),
     [termRows]
@@ -1521,7 +1558,7 @@ export function ScoreboardContent({
   const valuesByHouse = useMemo(() => {
     const map = {};
     housesData.forEach((row) => {
-      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      const houseId = resolveValuesHouseId(row.house_id);
       if (!houseId) return;
       if (!map[houseId]) {
         map[houseId] = [];
@@ -1532,11 +1569,11 @@ export function ScoreboardContent({
       });
     });
     return map;
-  }, [housesData]);
+  }, [housesData, resolveValuesHouseId]);
   const prevValuesByHouse = useMemo(() => {
     const map = {};
     prevHousesData.forEach((row) => {
-      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      const houseId = resolveValuesHouseId(row.house_id);
       if (!houseId) return;
       if (!map[houseId]) {
         map[houseId] = [];
@@ -1547,7 +1584,7 @@ export function ScoreboardContent({
       });
     });
     return map;
-  }, [prevHousesData]);
+  }, [prevHousesData, resolveValuesHouseId]);
   const valueHouseIds = useMemo(() => {
     const keys = new Set([
       ...Object.keys(houseMetaById),
@@ -1589,13 +1626,13 @@ export function ScoreboardContent({
     const map = {};
     classValuesData.forEach((row) => {
       const classId = row.class_id;
-      const houseId = resolveHouseKey(row.house_id) || row.house_id;
+      const houseId = resolveValuesHouseId(row.house_id);
       if (!classId || !houseId) return;
       if (!map[classId]) map[classId] = {};
       map[classId][houseId] = (map[classId][houseId] || 0) + Number(row.total_points || 0);
     });
     return map;
-  }, [classValuesData]);
+  }, [classValuesData, resolveValuesHouseId]);
   const yearHouseBreakdown = useMemo(() => {
     const map = {};
     classesList.forEach((cls) => {
