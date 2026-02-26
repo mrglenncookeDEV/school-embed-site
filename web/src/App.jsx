@@ -175,23 +175,96 @@ function SlideUpModal({ open, onClose, children }) {
   );
 }
 
-function ReportViewer({ url, fallbackUrl, extraUrls = [], title }) {
+function ReportViewer({ buildUrl, buildFallbackUrl, buildExtraUrls = [], title, hidePeriodToggle = false, audience = "staff" }) {
+  const [period, setPeriod] = useState("week");
   const [html, setHtml] = useState("");
+  const [embedUrl, setEmbedUrl] = useState("");
+  const [externalLink, setExternalLink] = useState("");
+  const [localReport, setLocalReport] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const urls = useMemo(
-    () =>
-      [url, fallbackUrl, ...extraUrls, "/reports/values"]
-        .filter(Boolean)
-        .filter((v, idx, arr) => arr.indexOf(v) === idx),
-    [url, fallbackUrl, extraUrls]
-  );
+
+  const urls = useMemo(() => {
+    const primary  = buildUrl?.(period) ?? "";
+    const fallback = buildFallbackUrl?.(period) ?? "";
+    const extras   = buildExtraUrls.map(fn => fn(period));
+    return [primary, fallback, ...extras, "/reports/values"]
+      .filter(Boolean)
+      .filter((v, idx, arr) => arr.indexOf(v) === idx);
+  }, [period, buildUrl, buildFallbackUrl, buildExtraUrls]);
 
   useEffect(() => {
     let cancelled = false;
     setHtml("");
+    setEmbedUrl("");
+    setExternalLink("");
+    setLocalReport(null);
     setError("");
     setLoading(true);
+    const preferredEmbedUrl =
+      urls.find((u) => u.includes("school-embed-site.workers.dev")) ||
+      urls.find((u) => /^https?:\/\//.test(u)) ||
+      urls[0] ||
+      "";
+    const isPdfMode = urls.some((u) => u.includes("format=pdf"));
+    const loadLocalReport = async () => {
+      const [scoreRes, valuesRes, highlightsRes] = await Promise.all([
+        fetch(`${import.meta.env.BASE_URL}api/scoreboard/current`),
+        fetch(`${import.meta.env.BASE_URL}api/values-breakdown?period=${period}`),
+        fetch(`${import.meta.env.BASE_URL}api/highlights?period=${period}`).catch(() => null),
+      ]);
+      const scorePayload = await scoreRes.json();
+      const valuesPayload = await valuesRes.json();
+      const highlightsPayload = highlightsRes ? await highlightsRes.json().catch(() => ({})) : {};
+      if (!scoreRes.ok) throw new Error(scorePayload.error || "Unable to load scoreboard");
+      if (!valuesRes.ok) throw new Error(valuesPayload.error || "Unable to load values");
+      const houseRowsRaw = period === "week"
+        ? (scorePayload.totalsThisWeek || [])
+        : (scorePayload.totalsAllTime || []);
+      const houses = [...houseRowsRaw]
+        .map((row) => ({
+          name: row.name || row.house || row.id || "House",
+          points: Number(row.points || 0),
+        }))
+        .sort((a, b) => b.points - a.points);
+      const rawValuesRows =
+        valuesPayload?.current?.houses ||
+        valuesPayload?.houses ||
+        valuesPayload?.data ||
+        [];
+      const categoryTotals = rawValuesRows.reduce((acc, row) => {
+        const category = row.award_category || row.category || "General Award";
+        const points = Number(row.total_points ?? row.points ?? 0);
+        acc[category] = (acc[category] || 0) + points;
+        return acc;
+      }, {});
+      const valuesRows = Object.entries(categoryTotals)
+        .map(([category, points]) => ({ category, points }))
+        .sort((a, b) => b.points - a.points);
+      const totalPoints = houses.reduce((sum, h) => sum + h.points, 0);
+      return {
+        updatedLabel: scorePayload.lastUpdated || "",
+        totalPoints,
+        houses,
+        valuesRows,
+        highlights: highlightsPayload?.text || "",
+      };
+    };
+    if (isPdfMode) {
+      setEmbedUrl(preferredEmbedUrl);
+      setExternalLink(preferredEmbedUrl);
+      loadLocalReport()
+        .then((data) => {
+          if (!cancelled) setLocalReport(data);
+        })
+        .catch((err) => {
+          if (!cancelled) console.warn("Local report fallback failed", err);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => { cancelled = true; };
+    }
     const tryFetch = async (u) => {
       const res = await fetch(u);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -216,23 +289,137 @@ function ReportViewer({ url, fallbackUrl, extraUrls = [], title }) {
           errors.push(`${candidate}: ${err.message || err}`);
         }
       }
-      if (!cancelled) setError(`Failed to load report. Tried: ${errors.join(" | ")}`);
+      if (!cancelled) {
+        if (preferredEmbedUrl) {
+          setEmbedUrl(preferredEmbedUrl);
+          setExternalLink(preferredEmbedUrl);
+          loadLocalReport().then((data) => {
+            if (!cancelled) setLocalReport(data);
+          }).catch((localErr) => {
+            if (!cancelled) console.warn("Local report fallback failed", localErr);
+          });
+        } else {
+          setError(`Failed to load report. Tried: ${errors.join(" | ")}`);
+        }
+      }
     };
     run().finally(() => {
       if (!cancelled) setLoading(false);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [urls]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3">
-      <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+        {!hidePeriodToggle && (
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+            {["week", "term"].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={
+                  period === p
+                    ? "rounded px-3 py-1 text-sm font-semibold bg-white shadow text-slate-800"
+                    : "rounded px-3 py-1 text-sm text-slate-500 hover:text-slate-700"
+                }
+              >
+                {p === "week" ? "This week" : "This term"}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {error ? (
         <p className="text-sm text-rose-600">Could not load report: {error}</p>
       ) : loading ? (
         <p className="text-sm text-slate-600">Loading report…</p>
+      ) : localReport ? (
+        <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
+          {externalLink ? (
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
+              <span className="text-slate-600 truncate">External report unavailable here. Showing local fallback report.</span>
+              <a
+                href={externalLink}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded bg-[#1f2aa6] px-2.5 py-1 font-semibold text-white hover:bg-[#162082]"
+              >
+                Open external source
+              </a>
+            </div>
+          ) : null}
+          <div className="space-y-5 p-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-800">
+                {audience === "parents" ? "Parent-safe summary" : "Staff summary"} · {period === "week" ? "This week" : "This term"}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Total points: <span className="font-semibold text-slate-900">{localReport.totalPoints}</span>
+                {localReport.updatedLabel ? ` · Updated: ${localReport.updatedLabel}` : ""}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">House standings</h3>
+              <div className="mt-2 rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left">House</th>
+                      <th className="px-3 py-2 text-right">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localReport.houses.map((row) => (
+                      <tr key={row.name} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-800">{row.name}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{row.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Values breakdown</h3>
+              <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                {localReport.valuesRows.map((row) => (
+                  <li key={row.category} className="flex items-center justify-between rounded border border-slate-200 px-3 py-2">
+                    <span>{row.category}</span>
+                    <span className="font-semibold text-slate-900">{row.points}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {localReport.highlights ? (
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Highlights</h3>
+                <p className="mt-2 text-sm text-slate-700">{localReport.highlights}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : embedUrl ? (
+        <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
+            <span className="text-slate-600 truncate">Report source: {embedUrl}</span>
+            <a
+              href={embedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 rounded bg-[#1f2aa6] px-2.5 py-1 font-semibold text-white hover:bg-[#162082]"
+            >
+              Open in new tab
+            </a>
+          </div>
+          <iframe
+            src={embedUrl}
+            title={title}
+            className="h-[78vh] w-full border-0"
+            loading="lazy"
+          />
+        </div>
       ) : (
         <div
           className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white"
@@ -314,8 +501,10 @@ function AppContent() {
   const [isTeacherModalOpen, setTeacherModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsHovering, setReportsHovering] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = useRef(null);
+  const reportsHoverTimerRef = useRef(null);
   const lastNonTeacherPathRef = useRef("/scoreboard");
   const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
   const relativePath = location.pathname.startsWith(basePath)
@@ -337,10 +526,9 @@ function AppContent() {
   const REPORTS_BASE = `${PRIMARY_REPORTS_HOST.replace(/\/$/, "")}/reports/values`;
   const REPORTS_BASE_FALLBACK = `${FALLBACK_REPORTS_HOST}/reports/values`;
   const REPORTS_BASE_DEPLOYED = `${DEPLOYED_REPORTS_HOST}/reports/values`;
-  const DEFAULT_PERIOD = "week";
-  const staffReportUrl = (audience = "staff") =>
+  const staffReportUrl = (audience = "staff", period = "week") =>
     reportsAvailable
-      ? `${REPORTS_BASE}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${STAFF_SECRET}`
+      ? `${REPORTS_BASE}?period=${period}&audience=${audience}&token=${STAFF_SECRET}`
       : "";
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -361,10 +549,10 @@ function AppContent() {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, [isEmbedRoute]);
-  const staffReportUrlFallback = (audience = "staff") =>
-    `${REPORTS_BASE_FALLBACK}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${STAFF_SECRET}`;
-  const staffReportUrlDeployed = (audience = "staff") =>
-    `${REPORTS_BASE_DEPLOYED}?period=${DEFAULT_PERIOD}&audience=${audience}&token=${STAFF_SECRET}`;
+  const staffReportUrlFallback = (audience = "staff", period = "week") =>
+    `${REPORTS_BASE_FALLBACK}?period=${period}&audience=${audience}&token=${STAFF_SECRET}`;
+  const staffReportUrlDeployed = (audience = "staff", period = "week") =>
+    `${REPORTS_BASE_DEPLOYED}?period=${period}&audience=${audience}&token=${STAFF_SECRET}`;
   const openTeacherSubmit = useCallback((entry = null) => {
     setEditingEntry(entry);
     setTeacherModalOpen(true);
@@ -382,12 +570,48 @@ function AppContent() {
     { label: "Submit Points", to: "/teacher", icon: Send },
     { label: "Admin", to: "/admin", icon: UserStar },
   ];
+  const handleReportNavigate = useCallback((to) => {
+    navigate(to);
+    setReportsOpen(false);
+  }, [navigate]);
+  const handleAssemblyPptExport = useCallback(() => {
+    setReportsOpen(false);
+    if (relativePath === "/scoreboard" || relativePath === "/teacher") {
+      window.__pendingAssemblyPptExport = false;
+      window.dispatchEvent(new CustomEvent("export-assembly-ppt"));
+      return;
+    }
+    window.__pendingAssemblyPptExport = true;
+    navigate("/scoreboard");
+  }, [navigate, relativePath]);
 
+  const clearReportsHoverTimer = useCallback(() => {
+    if (reportsHoverTimerRef.current) {
+      clearTimeout(reportsHoverTimerRef.current);
+      reportsHoverTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearReportsHoverTimer, [clearReportsHoverTimer]);
   useEffect(() => {
-    const handleClick = () => setReportsOpen(false);
+    const handleClick = () => {
+      setReportsOpen(false);
+      setReportsHovering(false);
+      clearReportsHoverTimer();
+    };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
-  }, []);
+  }, [clearReportsHoverTimer]);
+  const handleReportsMouseEnter = useCallback(() => {
+    setReportsHovering(true);
+    clearReportsHoverTimer();
+    reportsHoverTimerRef.current = setTimeout(() => {
+      setReportsOpen(true);
+    }, 1400);
+  }, [clearReportsHoverTimer]);
+  const handleReportsMouseLeave = useCallback(() => {
+    setReportsHovering(false);
+    clearReportsHoverTimer();
+  }, [clearReportsHoverTimer]);
   useEffect(() => {
     if (relativePath !== "/teacher") {
       lastNonTeacherPathRef.current = relativePath;
@@ -418,7 +642,7 @@ function AppContent() {
       {!isEmbedRoute && (
         <header
           ref={headerRef}
-          className="fixed top-0 left-0 right-0 z-10 border-b border-slate-200 bg-[#1f2aa6] px-6 py-4 shadow-sm backdrop-blur"
+          className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200 bg-[#1f2aa6] px-6 py-4 shadow-sm backdrop-blur"
         >
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
@@ -462,31 +686,56 @@ function AppContent() {
                 <div
                   className="relative"
                   onClick={(event) => event.stopPropagation()}
-                  onMouseEnter={() => setReportsOpen(true)}
-                  onMouseLeave={() => setReportsOpen(false)}
+                  onMouseEnter={handleReportsMouseEnter}
+                  onMouseLeave={handleReportsMouseLeave}
                 >
                   <button
                     type="button"
-                    onMouseEnter={() => setReportsOpen(true)}
+                    onClick={() => {
+                      clearReportsHoverTimer();
+                      setReportsOpen((open) => !open);
+                    }}
                     className="group relative flex w-full items-center justify-center overflow-hidden rounded-full px-4 py-3"
+                    aria-haspopup="menu"
+                    aria-expanded={reportsOpen}
                   >
                     <span
-                      className="pointer-events-none absolute inset-0 rounded-full bg-white origin-left scale-x-0 transition-transform duration-[1400ms] ease-out group-hover:scale-x-100"
+                      className={`pointer-events-none absolute inset-0 rounded-full bg-white origin-left transition-transform duration-[1400ms] ease-out ${
+                        reportsOpen || reportsHovering ? "scale-x-100" : "scale-x-0"
+                      }`}
                       aria-hidden="true"
                     />
-                    <span className="relative z-10 flex items-center gap-2 whitespace-nowrap text-xs font-bold uppercase tracking-wide text-white transition-colors duration-[1400ms] group-hover:text-black">
+                    <span
+                      className={`relative z-10 flex items-center gap-2 whitespace-nowrap text-xs font-bold uppercase tracking-wide transition-colors duration-[1400ms] ${
+                        reportsOpen || reportsHovering ? "text-black" : "text-white"
+                      }`}
+                    >
                       <ChartPie className="w-4 h-4" />
                       Reports
                     </span>
                   </button>
                   {reportsOpen && (
                     <div
-                      className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-lg z-20"
+                      className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white opacity-100 shadow-lg z-[60] overflow-hidden"
                       onClick={(event) => event.stopPropagation()}
+                      role="menu"
                     >
-                      <div className="px-4 py-3 text-sm font-semibold text-orange-700 bg-orange-50 rounded-xl">
-                        In Development...
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleReportNavigate("/reports/staff")}
+                        className="flex w-full items-center px-4 py-2.5 text-left text-sm font-semibold text-slate-800 transition-colors hover:bg-[#4169E1] hover:text-white"
+                        role="menuitem"
+                      >
+                        Quick Report
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAssemblyPptExport}
+                        className="flex w-full items-center px-4 py-2.5 text-left text-sm font-semibold text-slate-800 transition-colors hover:bg-[#4169E1] hover:text-white border-t border-slate-100"
+                        role="menuitem"
+                      >
+                        Assembly PowerPoint
+                      </button>
                     </div>
                   )}
                 </div>
@@ -525,12 +774,16 @@ function AppContent() {
 
             {/* Reports */}
             <Route
+              path="/reports/quick"
+              element={<Navigate to="/reports/staff" replace />}
+            />
+            <Route
               path="/reports/staff"
               element={
                 <ReportViewer
-                  url={staffReportUrl("staff")}
-                  fallbackUrl={staffReportUrlFallback("staff")}
-                  extraUrls={[staffReportUrlDeployed("staff")]}
+                  buildUrl={(p) => staffReportUrl("staff", p)}
+                  buildFallbackUrl={(p) => staffReportUrlFallback("staff", p)}
+                  buildExtraUrls={[(p) => staffReportUrlDeployed("staff", p)]}
                   title="Staff / Ofsted values report"
                 />
               }
@@ -539,9 +792,9 @@ function AppContent() {
               path="/reports/parents"
               element={
                 <ReportViewer
-                  url={staffReportUrl("parents")}
-                  fallbackUrl={staffReportUrlFallback("parents")}
-                  extraUrls={[staffReportUrlDeployed("parents")]}
+                  buildUrl={(p) => staffReportUrl("parents", p)}
+                  buildFallbackUrl={(p) => staffReportUrlFallback("parents", p)}
+                  buildExtraUrls={[(p) => staffReportUrlDeployed("parents", p)]}
                   title="Parent-safe values report"
                 />
               }
@@ -550,9 +803,9 @@ function AppContent() {
               path="/reports/weekly-pdf"
               element={
                 <ReportViewer
-                  url={`${staffReportUrl("staff")}&format=pdf`}
-                  fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf`}
-                  extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf`]}
+                  buildUrl={(p) => `${staffReportUrl("staff", p)}&format=pdf`}
+                  buildFallbackUrl={(p) => `${staffReportUrlFallback("staff", p)}&format=pdf`}
+                  buildExtraUrls={[(p) => `${staffReportUrlDeployed("staff", p)}&format=pdf`]}
                   title="Weekly PDF (staff)"
                 />
               }
@@ -561,9 +814,9 @@ function AppContent() {
               path="/reports/print-pdf"
               element={
                 <ReportViewer
-                  url={`${staffReportUrl("staff")}&format=pdf&monochrome=true`}
-                  fallbackUrl={`${staffReportUrlFallback("staff")}&format=pdf&monochrome=true`}
-                  extraUrls={[`${staffReportUrlDeployed("staff")}&format=pdf&monochrome=true`]}
+                  buildUrl={(p) => `${staffReportUrl("staff", p)}&format=pdf&monochrome=true`}
+                  buildFallbackUrl={(p) => `${staffReportUrlFallback("staff", p)}&format=pdf&monochrome=true`}
+                  buildExtraUrls={[(p) => `${staffReportUrlDeployed("staff", p)}&format=pdf&monochrome=true`]}
                   title="Print-friendly PDF"
                 />
               }

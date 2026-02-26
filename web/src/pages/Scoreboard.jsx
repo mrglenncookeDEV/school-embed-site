@@ -1022,7 +1022,11 @@ export function ScoreboardContent({
   const scoreboardMountedRef = useRef(false);
   const prevWeekLeaderRef = useRef(null);
   const prevTermLeaderRef = useRef(null);
-  const chartRef = useRef(null);
+  const pendingPptExportRef = useRef(false);
+  const lastChartBurstKeyRef = useRef({ week: null, term: null });
+  const hasFiredInitialLoadBurstRef = useRef(false);
+  const weekChartContainerRef = useRef(null);
+  const termChartContainerRef = useRef(null);
   const weekChartRef = useRef(null);
   const termChartRef = useRef(null);
   const valuesRef = useRef(null);
@@ -1893,61 +1897,64 @@ export function ScoreboardContent({
     });
   }, [termRows, houseDelta, houseMetaById]);
 
-  useEffect(() => {
-    const handler = () => {
-      const currentRows = currentPeriod === "week" ? weekRows : termRows;
-      const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
-      const leaderRow = sorted[0];
-      const secondRow = sorted[1];
-      const leaderName = leaderRow
-        ? leaderRow.name || houseMetaById[leaderRow.houseKey]?.name || getHouseById(leaderRow.houseKey)?.name || leaderRow.houseKey
-        : "—";
-      const leaderColor = leaderRow
-        ? leaderRow.color || houseMetaById[leaderRow.houseKey]?.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
-        : "#2563eb";
-      const leaderMargin = leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
-      const prevLeaderName =
-        currentPeriod === "week"
-          ? (prevWeekLeaderRef.current
-            ? houseMetaById[prevWeekLeaderRef.current]?.name || getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
-            : null)
-          : (prevTermLeaderRef.current
-            ? houseMetaById[prevTermLeaderRef.current]?.name || getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
-            : null);
-      const chartData = currentRows.map((row) => ({
-        name: row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey,
-        points: row.points || 0,
-        color: row.color || houseMetaById[row.houseKey]?.color || getHouseById(row.houseKey)?.color || "#94a3b8",
-      }));
+  const tryExportAssemblyDeck = useCallback(() => {
+    const currentRows = currentPeriod === "week" ? weekRows : termRows;
+    if (loading || !currentRows.length) return false;
+    const sorted = [...currentRows].sort((a, b) => (b.points || 0) - (a.points || 0));
+    const leaderRow = sorted[0];
+    const secondRow = sorted[1];
+    const leaderName = leaderRow
+      ? leaderRow.name || houseMetaById[leaderRow.houseKey]?.name || getHouseById(leaderRow.houseKey)?.name || leaderRow.houseKey
+      : "—";
+    const leaderColor = leaderRow
+      ? leaderRow.color || houseMetaById[leaderRow.houseKey]?.color || getHouseById(leaderRow.houseKey)?.color || "#2563eb"
+      : "#2563eb";
+    const leaderMargin = leaderRow && secondRow ? (leaderRow.points || 0) - (secondRow.points || 0) : 0;
+    const prevLeaderName =
+      currentPeriod === "week"
+        ? (prevWeekLeaderRef.current
+          ? houseMetaById[prevWeekLeaderRef.current]?.name || getHouseById(prevWeekLeaderRef.current)?.name || prevWeekLeaderRef.current
+          : null)
+        : (prevTermLeaderRef.current
+          ? houseMetaById[prevTermLeaderRef.current]?.name || getHouseById(prevTermLeaderRef.current)?.name || prevTermLeaderRef.current
+          : null);
+    const chartData = currentRows.map((row) => ({
+      name: row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey,
+      points: row.points || 0,
+      color: row.color || houseMetaById[row.houseKey]?.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+      iconName: row.iconName || houseMetaById[row.houseKey]?.iconName || "",
+    }));
 
-      exportAssemblyDeck({
-        view: currentPeriod,
-        periodLabel: currentPeriod === "week" ? "week" : "term",
-        updatedLabel: lastUpdatedLabel,
-        summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
-        leader: {
-          name: leaderName,
-          color: leaderColor,
-          margin: leaderMargin,
-          prevLeader: prevLeaderName,
-        },
-        chartData,
-        deltas: houseDelta,
-        totalValues,
-        houses: sortedHouses.map((id) => ({
-          id,
-          name: houseMetaById[id]?.name || getHouseById(id)?.name || id,
-          data: valuesByHouse[id] || [],
-          caption: valueCaptions.houses?.[id],
-          color: houseMetaById[id]?.color || getHouseById(id)?.color || "#94a3b8",
-        })),
-        colours: categoryColorMap,
-      }).catch((err) => console.error("Admin-triggered PPT export failed", err));
-    };
-
-    window.addEventListener("export-assembly-ppt", handler);
-    return () => window.removeEventListener("export-assembly-ppt", handler);
+    exportAssemblyDeck({
+      view: currentPeriod,
+      periodLabel: currentPeriod === "week" ? "week" : "term",
+      updatedLabel: lastUpdatedLabel,
+      summaryLine: currentPeriod === "week" ? weekSummaryLine : termSummaryLine,
+      leader: {
+        name: leaderName,
+        color: leaderColor,
+        margin: leaderMargin,
+        prevLeader: prevLeaderName,
+      },
+      chartData,
+      deltas: houseDelta,
+      totalValues,
+      houses: sortedHouses.map((id) => ({
+        id,
+        name: houseMetaById[id]?.name || getHouseById(id)?.name || id,
+        data: valuesByHouse[id] || [],
+        caption: valueCaptions.houses?.[id],
+        color: houseMetaById[id]?.color || getHouseById(id)?.color || "#94a3b8",
+        iconName: houseMetaById[id]?.iconName || "",
+      })),
+      colours: categoryColorMap,
+    }).catch((err) => {
+      console.error("Admin-triggered PPT export failed", err);
+      alert(`Export slides failed: ${err?.message || "Unknown error"}`);
+    });
+    return true;
   }, [
+    loading,
     currentPeriod,
     weekRows,
     termRows,
@@ -1963,6 +1970,33 @@ export function ScoreboardContent({
     valueCaptions,
     valueCaptions.houses,
   ]);
+
+  useEffect(() => {
+    const handler = () => {
+      const didExport = tryExportAssemblyDeck();
+      if (!didExport) {
+        pendingPptExportRef.current = true;
+      }
+    };
+
+    window.addEventListener("export-assembly-ppt", handler);
+    return () => window.removeEventListener("export-assembly-ppt", handler);
+  }, [tryExportAssemblyDeck]);
+
+  useEffect(() => {
+    if (!pendingPptExportRef.current) return;
+    const didExport = tryExportAssemblyDeck();
+    if (didExport) {
+      pendingPptExportRef.current = false;
+    }
+  }, [tryExportAssemblyDeck]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.__pendingAssemblyPptExport) return;
+    window.__pendingAssemblyPptExport = false;
+    pendingPptExportRef.current = true;
+  }, []);
 
   const weekTimeProgress = clamp(getWeekProgress());
 
@@ -2132,10 +2166,14 @@ export function ScoreboardContent({
     return Array.from(new Set(colors));
   }, [tiedHouses]);
 
-  const confettiColors = useMemo(() => {
-    const base = [...tieHouseColors, leadingHouseColor, "#facc15"];
+  const weekConfettiColors = useMemo(() => {
+    const base = [...tieHouseColors, leadingHouseColor].filter(Boolean);
     return Array.from(new Set(base));
   }, [leadingHouseColor, tieHouseColors]);
+  const termConfettiColors = useMemo(() => {
+    const base = [...termTieColors, termLeadingHouseColor].filter(Boolean);
+    return Array.from(new Set(base));
+  }, [termLeadingHouseColor, termTieColors]);
 
   const weekFooterAccentBackground = buildAccentBackground(
     leadingHouseColor,
@@ -2146,8 +2184,10 @@ export function ScoreboardContent({
     termTieColors
   );
 
-  const fireConfettiBurst = () => {
-    const rect = chartRef.current?.getBoundingClientRect();
+  const fireConfettiBurst = useCallback((period = currentPeriod) => {
+    const isTerm = period === "term";
+    const targetRef = isTerm ? termChartContainerRef : weekChartContainerRef;
+    const rect = targetRef.current?.getBoundingClientRect();
 
     const origin = rect
       ? {
@@ -2156,9 +2196,11 @@ export function ScoreboardContent({
       }
       : { x: 0.5, y: 0.25 };
 
-    const colors = confettiColors.length
-      ? confettiColors
-      : ["#facc15", leadingHouseColor];
+    const periodColors = isTerm ? termConfettiColors : weekConfettiColors;
+    const fallbackColor = isTerm ? termLeadingHouseColor : leadingHouseColor;
+    const colors = periodColors.length
+      ? periodColors
+      : [fallbackColor || "#2563eb"];
 
     const defaults = {
       startVelocity: 45,
@@ -2175,20 +2217,26 @@ export function ScoreboardContent({
     confetti({ ...defaults, particleCount: 90 });
     setTimeout(() => confetti({ ...defaults, particleCount: 60 }), 200);
     setTimeout(() => confetti({ ...defaults, particleCount: 40 }), 400);
-  };
+  }, [
+    currentPeriod,
+    leadingHouseColor,
+    termLeadingHouseColor,
+    termConfettiColors,
+    weekConfettiColors,
+  ]);
 
   useEffect(() => {
     if (
       weekLeadingHouseKey &&
       prevWeekLeaderRef.current &&
       prevWeekLeaderRef.current !== weekLeadingHouseKey &&
-      chartRef.current
+      weekChartContainerRef.current
     ) {
-      fireConfettiBurst();
+      fireConfettiBurst("week");
     }
 
     prevWeekLeaderRef.current = weekLeadingHouseKey;
-  }, [weekLeadingHouseKey]);
+  }, [fireConfettiBurst, weekLeadingHouseKey]);
 
   const hasActiveLeader =
     topPoints !== null &&
@@ -2232,8 +2280,69 @@ export function ScoreboardContent({
     Boolean(termLeadingRow);
 
   useEffect(() => {
+    if (
+      termLeadingHouseKey &&
+      prevTermLeaderRef.current &&
+      prevTermLeaderRef.current !== termLeadingHouseKey &&
+      termChartContainerRef.current
+    ) {
+      fireConfettiBurst("term");
+    }
+
     prevTermLeaderRef.current = termLeadingHouseKey;
-  }, [termLeadingHouseKey]);
+  }, [fireConfettiBurst, termLeadingHouseKey]);
+
+  useEffect(() => {
+    if (loading || error) return;
+
+    if (activeSlide === 0) {
+      const weekStateKey = `${weekLeadingHouseKey || "none"}|${tiedHouseKeys.join(",")}|${topPoints ?? "na"}`;
+      if (
+        weekLeadingHouseKey &&
+        weekRows.length > 0 &&
+        lastChartBurstKeyRef.current.week !== weekStateKey
+      ) {
+        lastChartBurstKeyRef.current.week = weekStateKey;
+        setTimeout(() => fireConfettiBurst("week"), 120);
+      }
+      return;
+    }
+
+    const termStateKey = `${termLeadingHouseKey || "none"}|${termTiedHouseKeys.join(",")}|${termTopPoints ?? "na"}`;
+    if (
+      !termDisabled &&
+      termLeadingHouseKey &&
+      termRows.length > 0 &&
+      lastChartBurstKeyRef.current.term !== termStateKey
+    ) {
+      lastChartBurstKeyRef.current.term = termStateKey;
+      setTimeout(() => fireConfettiBurst("term"), 120);
+    }
+  }, [
+    activeSlide,
+    error,
+    fireConfettiBurst,
+    loading,
+    termDisabled,
+    termLeadingHouseKey,
+    termRows.length,
+    termTiedHouseKeys,
+    termTopPoints,
+    tiedHouseKeys,
+    topPoints,
+    weekLeadingHouseKey,
+    weekRows.length,
+  ]);
+
+  useEffect(() => {
+    if (hasFiredInitialLoadBurstRef.current) return;
+    if (loading || error) return;
+    if (currentPeriod === "term" && termDisabled) return;
+    hasFiredInitialLoadBurstRef.current = true;
+    setTimeout(() => {
+      fireConfettiBurst(currentPeriod === "term" ? "term" : "week");
+    }, 220);
+  }, [currentPeriod, error, fireConfettiBurst, loading, termDisabled]);
   const termLeaderMessage = (() => {
     if (termAllZeroPoints) return "No leaders so far";
     if (termAllEqualPoints) return "It's a TIE!";
@@ -2390,7 +2499,7 @@ export function ScoreboardContent({
                 </div>
                 <ChartGuard
                   name="week-main"
-                  forwardedRef={chartRef}
+                  forwardedRef={weekChartContainerRef}
                   className="w-full min-h-[320px]"
                   style={{ height: "400px" }}
                 >
@@ -2554,7 +2663,7 @@ export function ScoreboardContent({
                     titleColor={WEEK_TITLE_COLOR}
                     borderStyle={weekTrackBorderStyle}
                     leaderHouseKey={weekLeadingHouseKey}
-                    onFinish={fireConfettiBurst}
+                    onFinish={() => fireConfettiBurst("week")}
                   />
                 </div>
             </div>
@@ -2615,7 +2724,12 @@ export function ScoreboardContent({
                     No active term
                   </div>
                 ) : (
-                  <ChartGuard name="term-main" className="w-full min-h-[320px]" style={{ height: "400px" }}>
+                  <ChartGuard
+                    name="term-main"
+                    forwardedRef={termChartContainerRef}
+                    className="w-full min-h-[320px]"
+                    style={{ height: "400px" }}
+                  >
                     <ResponsiveContainer ref={termChartRef} width="100%" height="100%" minWidth={0} minHeight={0}>
                       <BarChart
                         data={termRows}
@@ -2773,7 +2887,7 @@ export function ScoreboardContent({
                     footer={termLeadingHouseFooter}
                     termEndDate={termEndDate}
                     leaderHouseKey={termLeadingHouseKey}
-                    onFinish={fireConfettiBurst}
+                    onFinish={() => fireConfettiBurst("term")}
                   />
                 </div>
               </div>
@@ -2843,6 +2957,7 @@ export function ScoreboardContent({
                     name: row.name || houseMetaById[row.houseKey]?.name || getHouseById(row.houseKey)?.name || row.houseKey,
                     points: row.points || 0,
                     color: row.color || houseMetaById[row.houseKey]?.color || getHouseById(row.houseKey)?.color || "#94a3b8",
+                    iconName: row.iconName || houseMetaById[row.houseKey]?.iconName || "",
                   }));
 
                   await exportAssemblyDeck({
@@ -2865,12 +2980,13 @@ export function ScoreboardContent({
                       data: valuesByHouse[id] || [],
                       caption: valueCaptions.houses?.[id],
                       color: houseMetaById[id]?.color || getHouseById(id)?.color || "#94a3b8",
+                      iconName: houseMetaById[id]?.iconName || "",
                     })),
                     colours: categoryColorMap,
                   });
                 } catch (err) {
                   console.error("Export slides failed", err);
-                  alert("Export slides failed. Please try again. Ensure internet access and allow downloads.");
+                  alert(`Export slides failed: ${err?.message || "Unknown error"}`);
                 } finally {
                   setExporting((p) => ({ ...p, slides: false }));
                 }
