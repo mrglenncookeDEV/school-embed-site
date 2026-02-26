@@ -429,9 +429,7 @@ function AppContent() {
                 loading="lazy"
               />
               <div className="min-w-0">
-                <p className="text-sm uppercase tracking-[0.2em] text-white whitespace-nowrap">
-                  Weekly Competition
-                </p>
+
                 <p
                   className="text-2xl font-semibold text-white whitespace-nowrap flex items-center gap-0"
                   style={{ fontFamily: PLAYFUL_FONT }}
