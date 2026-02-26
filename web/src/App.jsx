@@ -434,10 +434,10 @@ function AppContent() {
                   className="text-2xl font-semibold text-white whitespace-nowrap flex items-center gap-0"
                   style={{ fontFamily: PLAYFUL_FONT }}
                 >
-                  <span className="text-sky-500 text-4xl" aria-hidden="true">
+                  <span className="text-sky-500 text-4xl" aria-hidden="true" mb-2>
                     🏠
                   </span>{" "}
-                  <span className="text-2xl font-semibold text-white whitespace-nowrap">
+                  <span className="text-2xl font-semibold text-white whitespace-nowrap px-2 py-1. mt-2">
                     House Points
                   </span>
                 </p>
