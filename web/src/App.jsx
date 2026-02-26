@@ -195,6 +195,17 @@ function ReportViewer({ buildUrl, buildFallbackUrl, buildExtraUrls = [], title, 
 
   useEffect(() => {
     let cancelled = false;
+    const FETCH_TIMEOUT_MS = 10000;
+    const fetchWithTimeout = async (url, options = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        return response;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
     setHtml("");
     setEmbedUrl("");
     setExternalLink("");
@@ -209,9 +220,9 @@ function ReportViewer({ buildUrl, buildFallbackUrl, buildExtraUrls = [], title, 
     const isPdfMode = urls.some((u) => u.includes("format=pdf"));
     const loadLocalReport = async () => {
       const [scoreRes, valuesRes, highlightsRes] = await Promise.all([
-        fetch(`${import.meta.env.BASE_URL}api/scoreboard/current`),
-        fetch(`${import.meta.env.BASE_URL}api/values-breakdown?period=${period}`),
-        fetch(`${import.meta.env.BASE_URL}api/highlights?period=${period}`).catch(() => null),
+        fetchWithTimeout(`${import.meta.env.BASE_URL}api/scoreboard/current`),
+        fetchWithTimeout(`${import.meta.env.BASE_URL}api/values-breakdown?period=${period}`),
+        fetchWithTimeout(`${import.meta.env.BASE_URL}api/highlights?period=${period}`).catch(() => null),
       ]);
       const scorePayload = await scoreRes.json();
       const valuesPayload = await valuesRes.json();
@@ -266,7 +277,7 @@ function ReportViewer({ buildUrl, buildFallbackUrl, buildExtraUrls = [], title, 
       return () => { cancelled = true; };
     }
     const tryFetch = async (u) => {
-      const res = await fetch(u);
+      const res = await fetchWithTimeout(u);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
     };
@@ -337,19 +348,6 @@ function ReportViewer({ buildUrl, buildFallbackUrl, buildExtraUrls = [], title, 
         <p className="text-sm text-slate-600">Loading report…</p>
       ) : localReport ? (
         <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
-          {externalLink ? (
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
-              <span className="text-slate-600 truncate">External report unavailable here. Showing local fallback report.</span>
-              <a
-                href={externalLink}
-                target="_blank"
-                rel="noreferrer"
-                className="shrink-0 rounded bg-[#1f2aa6] px-2.5 py-1 font-semibold text-white hover:bg-[#162082]"
-              >
-                Open external source
-              </a>
-            </div>
-          ) : null}
           <div className="space-y-5 p-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-sm font-semibold text-slate-800">
@@ -784,7 +782,7 @@ function AppContent() {
                   buildUrl={(p) => staffReportUrl("staff", p)}
                   buildFallbackUrl={(p) => staffReportUrlFallback("staff", p)}
                   buildExtraUrls={[(p) => staffReportUrlDeployed("staff", p)]}
-                  title="Staff / Ofsted values report"
+                  title="Staff Report"
                 />
               }
             />

@@ -116,6 +116,15 @@ const CANONICAL_VALUES = [
   "Be Ready",
 ];
 
+const VALUE_CATEGORY_ALIAS = {
+  generalaward: "General Award",
+  general: "General Award",
+  bekind: "Be Kind",
+  beresponsible: "Be Responsible",
+  besafe: "Be Safe",
+  beready: "Be Ready",
+};
+
 const PLAYFUL_FONT = {
   fontFamily:
     '"Permanent Marker", "Marker Felt", "Kalam", cursive',
@@ -219,6 +228,14 @@ const clamp = (value, min = 0, max = 1) => {
   const num = Number(value ?? 0);
   if (Number.isNaN(num)) return min;
   return Math.min(max, Math.max(min, num));
+};
+
+const normaliseAwardCategory = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "General Award";
+  if (CANONICAL_VALUES.includes(raw)) return raw;
+  const key = raw.toLowerCase().replace(/[^a-z]/g, "");
+  return VALUE_CATEGORY_ALIAS[key] || null;
 };
 
 const clamp01 = (value) => clamp(value, 0, 1);
@@ -1094,15 +1111,6 @@ export function ScoreboardContent({
   }, [CATEGORY_PALETTE]);
 
   const awardCategories = CANONICAL_VALUES;
-  const captionsByHouse = useMemo(() => {
-    const map = {};
-    Object.entries(valueCaptions?.houses || {}).forEach(([key, val]) => {
-      const canonical = resolveHouseKey(key) || resolveHouseKey(Number(key)) || String(key);
-      map[canonical] = val;
-    });
-    return map;
-  }, [valueCaptions]);
-  const captionsByYear = valueCaptions.years || {};
   const getDominantPct = useCallback((rows) => {
     const total = rows.reduce((s, r) => s + r.points, 0);
     if (!total) return 0;
@@ -1111,12 +1119,31 @@ export function ScoreboardContent({
   const normaliseValues = useCallback((rows = []) => {
     const map = Object.fromEntries(CANONICAL_VALUES.map((v) => [v, 0]));
     rows.forEach((r) => {
-      const cat = r.category ?? r.award_category;
-      if (map[cat] !== undefined) {
-        map[cat] += Number(r.points || 0);
+      const canonicalCategory = normaliseAwardCategory(r.category ?? r.award_category);
+      if (canonicalCategory && map[canonicalCategory] !== undefined) {
+        map[canonicalCategory] += Number(r.points || 0);
       }
     });
     return CANONICAL_VALUES.map((v) => ({ category: v, points: map[v] }));
+  }, []);
+  const buildValuesCommentary = useCallback((rows = []) => {
+    const total = rows.reduce((sum, row) => sum + Number(row.points || 0), 0);
+    if (total <= 0) return "No points yet";
+
+    const ranked = [...rows]
+      .map((row) => ({ category: row.category, points: Number(row.points || 0) }))
+      .sort((a, b) => b.points - a.points);
+    const top = ranked[0];
+    if (!top || top.points <= 0) return "No points yet";
+
+    const leaders = ranked.filter((row) => row.points === top.points && row.points > 0);
+    if (leaders.length > 1) {
+      const names = leaders.map((row) => row.category).join(", ");
+      return `Top values tied: ${names}`;
+    }
+
+    const pct = Math.round((top.points / total) * 100);
+    return `${top.category} leads (${pct}% of ${total} pts)`;
   }, []);
 
   const renderHouseTooltip = ({ active, payload, label }) => {
@@ -1750,7 +1777,8 @@ export function ScoreboardContent({
       typeof category === "string" && category.trim().toLowerCase() === "general award";
     const candidates = totalValues.filter((value) => !isGeneralAward(value.category));
     if (!candidates.length) return null;
-    return candidates.reduce((a, b) => (b.points > a.points ? b : a));
+    const strongest = candidates.reduce((a, b) => (b.points > a.points ? b : a));
+    return strongest.points > 0 ? strongest : null;
   }, [totalValues]);
 
   const TrendArrow = ({ delta }) => {
@@ -3116,14 +3144,12 @@ export function ScoreboardContent({
                       size="md"
                       frameColour={house.color}
                     />
-                    {(captionsByHouse[houseId] || houseDelta[houseId] !== undefined) && (
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-slate-600">
-                          {total === 0 ? "No points yet" : (captionsByHouse[houseId] || `${total} pts recorded`)}
-                        </p>
-                        <TrendArrow delta={houseDelta[houseId]} />
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-600">
+                        {buildValuesCommentary(data)}
+                      </p>
+                      <TrendArrow delta={houseDelta[houseId]} />
+                    </div>
                     {deepDive && (
                       <ul className="text-xs text-slate-500 mt-1 space-y-1">
                         {total === 0 ? (
@@ -3159,14 +3185,12 @@ export function ScoreboardContent({
                         size="md"
                         frameColour="#e2e8f0"
                       />
-                      {(captionsByYear?.[year] || yearDelta[year] !== undefined) && (
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-slate-600">
-                            {total === 0 ? "No points yet" : (captionsByYear?.[year] || `${total} pts recorded`)}
-                          </p>
-                          <TrendArrow delta={yearDelta[year]} />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-slate-600">
+                          {buildValuesCommentary(data)}
+                        </p>
+                        <TrendArrow delta={yearDelta[year]} />
+                      </div>
                       {deepDive && (
                         <ul className="text-xs text-slate-500 mt-1 space-y-1">
                           {total === 0 ? (
