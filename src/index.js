@@ -742,27 +742,132 @@ async function handleEntriesPost(request, db, week) {
 
   const classId = Number(payload.classId);
   const houseId = Number(payload.houseId);
-  const points = Number(payload.points);
   const submittedByEmail = payload.submittedByEmail?.trim();
   const notes = payload.notes?.trim() || null;
+  const rawCategoryPoints =
+    payload.category_points && typeof payload.category_points === "object"
+      ? payload.category_points
+      : null;
+
+  if (!submittedByEmail) {
+    return json({ error: "submittedByEmail is required" }, 400);
+  }
+
+  if (!classId || !houseId) {
+    return json({ error: "classId and houseId are required" }, 400);
+  }
+
+  const entryDate = formatDate(getLondonDate());
+
+  if (rawCategoryPoints) {
+    const categoryRows = AWARD_CATEGORIES.map((category) => {
+      const raw = Number(rawCategoryPoints[category] ?? 0);
+      const safe = Number.isInteger(raw) ? raw : Math.trunc(raw || 0);
+      return { category, points: Math.max(0, Math.min(500, safe)) };
+    });
+    const totalPoints = categoryRows.reduce((sum, row) => sum + row.points, 0);
+    if (totalPoints <= 0) {
+      return json({ error: "At least one category must have points greater than zero" }, 400);
+    }
+    if (totalPoints > 2500) {
+      return json({ error: "Total points cannot exceed 2500" }, 400);
+    }
+
+    try {
+      await db
+        .prepare(
+          `DELETE FROM point_entries
+           WHERE week_id = ? AND class_id = ? AND house_id = ?`
+        )
+        .bind(week.id, classId, houseId)
+        .run();
+
+      for (const row of categoryRows) {
+        if (row.points <= 0) continue;
+        await db
+          .prepare(
+            `INSERT INTO point_entries (
+              entry_date,
+              week_id,
+              house_id,
+              class_id,
+              points,
+              notes,
+              submitted_by_email,
+              award_category,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+          )
+          .bind(
+            entryDate,
+            week.id,
+            houseId,
+            classId,
+            row.points,
+            notes,
+            submittedByEmail,
+            row.category
+          )
+          .run();
+      }
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (message.includes("UNIQUE constraint failed: point_entries.week_id, point_entries.class_id, point_entries.house_id")) {
+        return json(
+          {
+            error:
+              "Database migration required before category-based submissions can be saved. Apply migration 0008_update_point_entry_unique_index.sql.",
+          },
+          500
+        );
+      }
+      return json({ error: message || "Unable to save entry" }, 500);
+    }
+
+    await logAudit(db, {
+      action: "create_or_update_entry",
+      actorEmail: submittedByEmail,
+      targetType: "entry",
+      targetId: null,
+      meta: { totalPoints, notes, weekId: week.id, classId, houseId, categoryRows },
+    });
+
+    const { results } = await db
+      .prepare(
+        `SELECT id, entry_date, week_id, house_id, class_id, points, notes, submitted_by_email, award_category
+         FROM point_entries
+         WHERE week_id = ? AND class_id = ? AND house_id = ?
+         ORDER BY id DESC`
+      )
+      .bind(week.id, classId, houseId)
+      .all();
+
+    return json({ entries: results });
+  }
+
+  const points = Number(payload.points);
   const awardCategoryRaw = (payload.award_category ?? "").trim();
   const awardCategory = AWARD_CATEGORIES.includes(awardCategoryRaw)
     ? awardCategoryRaw
     : AWARD_CATEGORIES[0];
 
-  if (!classId || !houseId || !Number.isInteger(points)) {
-    return json({ error: "classId, houseId, and points are required" }, 400);
+  if (!Number.isInteger(points)) {
+    return json({ error: "points is required" }, 400);
   }
 
   if (points < 0 || points > 500) {
     return json({ error: "Points must be between 0 and 500" }, 400);
   }
 
-  if (!submittedByEmail) {
-    return json({ error: "submittedByEmail is required" }, 400);
-  }
-
-  const entryDate = formatDate(getLondonDate());
+  await db
+    .prepare(
+      `DELETE FROM point_entries
+       WHERE week_id = ? AND class_id = ? AND house_id = ?`
+    )
+    .bind(week.id, classId, houseId)
+    .run();
 
   await db
     .prepare(
@@ -778,15 +883,7 @@ async function handleEntriesPost(request, db, week) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      ON CONFLICT(week_id, class_id, house_id)
-      DO UPDATE SET
-        entry_date = excluded.entry_date,
-        points = excluded.points,
-        notes = excluded.notes,
-        submitted_by_email = excluded.submitted_by_email,
-        award_category = excluded.award_category,
-        updated_at = datetime('now')`
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
     )
     .bind(
       entryDate,
@@ -805,6 +902,7 @@ async function handleEntriesPost(request, db, week) {
       `SELECT id, entry_date, week_id, house_id, class_id, points, notes, submitted_by_email, award_category
        FROM point_entries
        WHERE week_id = ? AND class_id = ? AND house_id = ?
+       ORDER BY id DESC
        LIMIT 1`
     )
     .bind(week.id, classId, houseId)
@@ -849,6 +947,72 @@ async function handleEntryDelete(request, db, entryId) {
   });
 
   return json({ deleted: true });
+}
+
+async function handleEntriesBulkDelete(request, db) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const scope = String(payload?.scope || "week").toLowerCase();
+  const actorEmail = String(payload?.actorEmail || "admin@school.local").trim() || "admin@school.local";
+  if (!["week", "term", "all"].includes(scope)) {
+    return json({ error: "Invalid scope. Expected week, term, or all." }, 400);
+  }
+
+  try {
+    let result;
+    let meta = { scope };
+
+    if (scope === "week") {
+      const week = await ensureCurrentWeek(db);
+      result = await db
+        .prepare(`DELETE FROM point_entries WHERE week_id = ?`)
+        .bind(week.id)
+        .run();
+      meta = { ...meta, weekId: week.id, weekStart: week.week_start };
+    } else if (scope === "term") {
+      const term = await fetchActiveTerm(db);
+      if (!term) {
+        return json({ error: "No active term" }, 404);
+      }
+      result = await db
+        .prepare(
+          `DELETE FROM point_entries
+           WHERE week_id IN (
+             SELECT id FROM weeks
+             WHERE week_start BETWEEN ? AND ?
+           )`
+        )
+        .bind(term.start_date, term.end_date)
+        .run();
+      meta = {
+        ...meta,
+        termId: term.id,
+        termName: term.name,
+        startDate: term.start_date,
+        endDate: term.end_date,
+      };
+    } else {
+      result = await db.prepare(`DELETE FROM point_entries`).run();
+    }
+
+    const deleted = Number(result?.meta?.changes ?? 0);
+    await logAudit(db, {
+      action: "bulk_delete_entries",
+      actorEmail,
+      targetType: "entry",
+      targetId: null,
+      meta: { ...meta, deleted },
+    });
+
+    return json({ success: true, deleted, scope });
+  } catch (error) {
+    return json({ error: error.message || "Bulk delete failed" }, 500);
+  }
 }
 
 async function fetchTerms(db) {
@@ -1142,6 +1306,10 @@ async function handleApi(request, env, url) {
   if (pathname === `/api/entries` && method === "POST") {
     const week = await ensureWeekForStart(db, getEntryWeekStart());
     return handleEntriesPost(request, db, week);
+  }
+
+  if (pathname === `/api/entries/bulk-delete` && method === "POST") {
+    return handleEntriesBulkDelete(request, db);
   }
 
   if (pathname === `/api/entries` && method === "GET") {

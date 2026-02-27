@@ -351,7 +351,7 @@ export default function Admin() {
     const scopeLabel =
       scope === "week" ? "the current week" : scope === "term" ? "the current term" : "ALL time";
     if (!window.confirm(`This will delete all submissions for ${scopeLabel}. This cannot be undone.`)) return;
-    const pin = window.prompt("Enter 6-digit PIN to confirm (warning: irreversible):");
+    const pin = (window.prompt("Enter 6-digit PIN to confirm (warning: irreversible):") || "").trim();
     if (pin !== "200903") {
       alert("PIN incorrect. No changes made.");
       return;
@@ -366,7 +366,8 @@ export default function Admin() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || "Bulk delete failed");
-      setActionMessage("Entries deleted.");
+      const deletedCount = Number(payload.deleted ?? 0);
+      setActionMessage(`Entries deleted: ${deletedCount}.`);
       await loadEntries(entryRange);
       await loadAudit();
     } catch (err) {

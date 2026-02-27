@@ -1053,6 +1053,7 @@ export function ScoreboardContent({
   const [valuesLoading, setValuesLoading] = useState(true);
   const [classValuesData, setClassValuesData] = useState([]);
   const [classValuesLoading, setClassValuesLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
   const [showClassBreakdown, setShowClassBreakdown] = useState(false);
   const [classesList, setClassesList] = useState([]);
   const [classesLoading, setClassesLoading] = useState(true);
@@ -1350,6 +1351,7 @@ export function ScoreboardContent({
 
     const handleRefresh = () => {
       loadScoreboard({ showLoading: false });
+      setRefreshToken((v) => v + 1);
     };
     window.addEventListener("scoreboard:refresh", handleRefresh);
 
@@ -1397,7 +1399,7 @@ export function ScoreboardContent({
     return () => {
       isMounted = false;
     };
-  }, [activeSlide]);
+  }, [activeSlide, refreshToken]);
 
   useEffect(() => {
     if (Object.prototype.hasOwnProperty.call(aiHighlights, currentPeriod)) {
@@ -1426,7 +1428,7 @@ export function ScoreboardContent({
     return () => {
       isMounted = false;
     };
-  }, [currentPeriod, aiHighlights]);
+  }, [currentPeriod, aiHighlights, refreshToken]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1457,7 +1459,7 @@ export function ScoreboardContent({
     return () => {
       isMounted = false;
     };
-  }, [currentPeriod]);
+  }, [currentPeriod, refreshToken]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}api/values-captions?period=${currentPeriod}`)
@@ -1469,7 +1471,7 @@ export function ScoreboardContent({
         })
       )
       .catch(() => setValueCaptions({ houses: {}, years: {} }));
-  }, [currentPeriod]);
+  }, [currentPeriod, refreshToken]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1492,7 +1494,7 @@ export function ScoreboardContent({
     return () => {
       isMounted = false;
     };
-  }, [currentPeriod]);
+  }, [currentPeriod, refreshToken]);
 
   // Global listener for admin-triggered PPT export
   const thisWeekTotal = useMemo(
@@ -1692,6 +1694,18 @@ export function ScoreboardContent({
     }));
     return normaliseValues(rows);
   }, [housesData, normaliseValues]);
+  const totalValuesLookup = useMemo(
+    () =>
+      totalValues.reduce((acc, row) => {
+        acc[row.category] = Number(row.points || 0);
+        return acc;
+      }, {}),
+    [totalValues]
+  );
+  const totalValuesPoints = useMemo(
+    () => totalValues.reduce((sum, row) => sum + Number(row.points || 0), 0),
+    [totalValues]
+  );
   const yearGroupOrder = useMemo(() => {
     const set = new Set();
     yearsData.forEach((row) => {
@@ -2060,6 +2074,12 @@ export function ScoreboardContent({
       ? `${name} · ${formattedStart} – ${formattedEnd}`
       : name;
   }, [scoreboard.term]);
+  const valuesPeriodLabel = useMemo(() => {
+    if (currentPeriod === "week") {
+      return weekRangeLabel ? `Active period: ${weekRangeLabel}` : "Active period: This week";
+    }
+    return termSubtitle ? `Active period: ${termSubtitle}` : "Active period: This term";
+  }, [currentPeriod, weekRangeLabel, termSubtitle]);
 
   const containerClasses = minimal ? "h-full" : "space-y-6";
   const weekLeadingRow = useMemo(() => getLeadingHouseRow(weekRows), [weekRows]);
@@ -3043,6 +3063,9 @@ export function ScoreboardContent({
               <p className="text-sm text-slate-600">
                 {currentPeriod === "week" ? "This week" : "This term"} by award category
               </p>
+              <p className="text-xs font-semibold text-slate-500">
+                {valuesPeriodLabel}
+              </p>
             </div>
             {isStaff && !publicDisplay && (
               <label className="flex items-center gap-2 text-xs text-slate-500 mt-2">
@@ -3086,6 +3109,14 @@ export function ScoreboardContent({
                         />
                         <span className="capitalize text-slate-700">
                           {cat}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {totalValuesLookup[cat] || 0} pts
+                          {" · "}
+                          {totalValuesPoints
+                            ? Math.round(((totalValuesLookup[cat] || 0) / totalValuesPoints) * 100)
+                            : 0}
+                          %
                         </span>
                       </div>
                     ))}

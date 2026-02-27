@@ -7,11 +7,18 @@ const AWARD_OPTIONS = [
   "Be Safe",
   "Be Ready",
 ];
+const CATEGORY_PALETTE = ["#60a5fa", "#f472b6", "#34d399", "#facc15", "#a78bfa"];
+const CATEGORY_COLOR_MAP = AWARD_OPTIONS.reduce((acc, category, idx) => {
+  acc[category] = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length];
+  return acc;
+}, {});
+
+const createInitialCategoryPoints = () =>
+  AWARD_OPTIONS.reduce((acc, category) => ({ ...acc, [category]: "0" }), {});
 
 const initialForm = {
   classId: "",
   houseId: "",
-  points: "0",
   notes: "",
   submittedByEmail: "",
 };
@@ -24,7 +31,7 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
   const [deadlinePassed, setDeadlinePassed] = useState(false);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [loading, setLoading] = useState(true);
-  const [awardCategory, setAwardCategory] = useState("General Award");
+  const [categoryPoints, setCategoryPoints] = useState(createInitialCategoryPoints);
   const isEditing = Boolean(entry);
 
   useEffect(() => {
@@ -98,19 +105,70 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
   useEffect(() => {
     if (!entry) {
       setForm(initialForm);
-      setAwardCategory("General Award");
+      setCategoryPoints(createInitialCategoryPoints());
       return;
     }
+
+    const nextCategoryPoints = createInitialCategoryPoints();
+    const entryCategory = AWARD_OPTIONS.includes(entry.award_category)
+      ? entry.award_category
+      : AWARD_OPTIONS[0];
+    const entryPoints = Number(entry.points);
+    nextCategoryPoints[entryCategory] = String(
+      Number.isInteger(entryPoints) && entryPoints > 0 ? entryPoints : 0
+    );
 
     setForm({
       classId: entry.class_id ?? entry.classId ?? "",
       houseId: entry.house_id ?? entry.houseId ?? "",
-      points: entry.points !== undefined ? String(entry.points) : "0",
       notes: entry.notes ?? "",
       submittedByEmail:
         entry.submitted_by_email ?? entry.submittedByEmail ?? "",
     });
-    setAwardCategory(entry.award_category ?? "General Award");
+    setCategoryPoints(nextCategoryPoints);
+  }, [entry]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateEditCategoryPoints = async () => {
+      if (!entry) return;
+      const classId = String(entry.class_id ?? entry.classId ?? "");
+      const houseId = String(entry.house_id ?? entry.houseId ?? "");
+      if (!classId || !houseId) return;
+
+      try {
+        const response = await fetch(`${import.meta.env.BASE_URL}api/entries?week=current`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const rows = Array.isArray(data.entries) ? data.entries : [];
+        const matchingRows = rows.filter((row) => {
+          const rowClassId = String(row.class_id ?? row.classId ?? "");
+          const rowHouseId = String(row.house_id ?? row.houseId ?? "");
+          return rowClassId === classId && rowHouseId === houseId;
+        });
+
+        if (!isMounted || matchingRows.length === 0) return;
+
+        const nextCategoryPoints = createInitialCategoryPoints();
+        matchingRows.forEach((row) => {
+          const category = row.award_category;
+          if (!AWARD_OPTIONS.includes(category)) return;
+          const points = Number(row.points);
+          nextCategoryPoints[category] = String(
+            Number.isInteger(points) && points > 0 ? points : 0
+          );
+        });
+        setCategoryPoints(nextCategoryPoints);
+      } catch {
+        // Keep local defaults if fetch fails.
+      }
+    };
+
+    hydrateEditCategoryPoints();
+    return () => {
+      isMounted = false;
+    };
   }, [entry]);
 
   useEffect(() => {
@@ -158,22 +216,26 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
     };
   }, []);
 
-  const numericPoints = Number(form.points);
-  const pointsValue = Number.isNaN(numericPoints) ? 0 : numericPoints;
-  const clampPoints = (value) => Math.min(500, Math.max(1, value));
-  const adjustPoints = (delta) => {
-    const current = Number(form.points || 0);
-    const safeCurrent = Number.isNaN(current) ? 0 : current;
-    const next = clampPoints(safeCurrent + delta);
-    setForm((prev) => ({ ...prev, points: String(next) }));
-  };
+  const categoryTotals = useMemo(
+    () =>
+      AWARD_OPTIONS.reduce((acc, category) => {
+        const raw = Number(categoryPoints[category]);
+        const value = Number.isNaN(raw) ? 0 : Math.max(0, Math.min(500, Math.trunc(raw)));
+        return { ...acc, [category]: value };
+      }, {}),
+    [categoryPoints]
+  );
+  const totalPoints = AWARD_OPTIONS.reduce(
+    (sum, category) => sum + (categoryTotals[category] || 0),
+    0
+  );
+  const hasPointsToSubmit = totalPoints > 0;
   const isSubmitting = status.type === "loading";
   const submitDisabled =
     isSubmitting ||
     !form.classId ||
     !form.houseId ||
-    Number.isNaN(numericPoints) ||
-    numericPoints <= 0 ||
+    !hasPointsToSubmit ||
     !form.submittedByEmail;
 
   const handleSubmit = async (event) => {
@@ -186,23 +248,23 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...form,
-          points: Number(form.points),
-          award_category: awardCategory,
+          points: totalPoints,
+          award_category: "General Award",
+          category_points: categoryTotals,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || "Unable to save entry");
+        throw new Error(data.error || `Unable to save entry (HTTP ${response.status})`);
       }
 
       setStatus({ type: "success", message: "Points submitted!" });
       setForm((prev) => ({
         ...prev,
-        points: "0",
         notes: "",
       }));
-      setAwardCategory("General Award");
+      setCategoryPoints(createInitialCategoryPoints());
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("scoreboard:refresh"));
       }
@@ -334,62 +396,50 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
             </div>
 
             <div className="flex flex-nowrap items-end gap-3">
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <label className="text-sm font-medium text-slate-700">Award Category</label>
-                <div className="relative">
-                  <select
-                    value={awardCategory}
-                    onChange={(event) => setAwardCategory(event.target.value)}
-                    disabled={formDisabled}
-                    className={`${compactInputClass} w-full min-w-0 !rounded-full appearance-none pr-10 focus:border-sky-500`}
-                  >
-                    {AWARD_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
-                    ▼
-                  </span>
+              <div className="w-full space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-700">
+                    Award points by category
+                  </label>
                 </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-slate-700">Points</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    step="1"
-                    value={form.points}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, points: event.target.value }))
-                    }
-                    disabled={formDisabled}
-                    className={`${compactInputClass} w-[108px] text-center !border-4 !border-sky-400 focus:!border-sky-500 !rounded-full custom-stepper`}
-                    required
-                  />
-                  <div className="flex flex-col gap-1">
-                    <button
-                      type="button"
-                      onClick={() => adjustPoints(1)}
-                      disabled={formDisabled || pointsValue >= 500}
-                      className="h-6 w-6 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-sm hover:bg-emerald-400 disabled:opacity-50"
-                      aria-label="Increase points"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustPoints(-1)}
-                      disabled={formDisabled || pointsValue <= 1}
-                      className="h-6 w-6 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-sm hover:bg-rose-400 disabled:opacity-50"
-                      aria-label="Decrease points"
-                    >
-                      ▼
-                    </button>
-                  </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {AWARD_OPTIONS.map((category) => {
+                    const color = CATEGORY_COLOR_MAP[category] || "#94a3b8";
+                    return (
+                      <label
+                        key={category}
+                        className="flex items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-sm font-medium text-slate-700"
+                        style={{
+                          borderColor: `${color}80`,
+                          background: formDisabled ? "#f8fafc" : `${color}1a`,
+                        }}
+                      >
+                        <span className="font-semibold" style={{ color }}>
+                          {category}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="500"
+                          step="1"
+                          value={categoryPoints[category]}
+                          onChange={(event) =>
+                            setCategoryPoints((prev) => ({
+                              ...prev,
+                              [category]: event.target.value,
+                            }))
+                          }
+                          disabled={formDisabled}
+                          className={`${compactInputClass} w-[88px] text-center font-semibold`}
+                          style={{
+                            borderColor: color,
+                            backgroundColor: formDisabled ? "#f1f5f9" : "#ffffff",
+                          }}
+                          required
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -415,6 +465,23 @@ export default function TeacherSubmit({ entry, onSuccess } = {}) {
                 className={`${inputClass} ${inputFill}`}
               />
             </label>
+
+            <div
+              className="rounded-3xl border px-4 py-4 text-center shadow-md"
+              style={{
+                borderColor: "#7c3aed",
+                background:
+                  "radial-gradient(circle at top left, rgba(96,165,250,0.25), transparent 48%), linear-gradient(135deg, #eef2ff 0%, #e0e7ff 45%, #ddd6fe 100%)",
+              }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-indigo-700">
+                Total points to submit
+              </p>
+              <p className="mt-1 text-4xl font-black leading-none text-indigo-900">
+                {totalPoints}
+                <span className="ml-2 text-lg font-bold align-middle text-indigo-700">pts</span>
+              </p>
+            </div>
 
             <button
               disabled={submitDisabled || formDisabled}
