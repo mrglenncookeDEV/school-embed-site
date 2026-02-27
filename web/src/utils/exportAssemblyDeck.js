@@ -456,24 +456,31 @@ export async function exportAssemblyDeck({
       color: (house.color || TEXT_DARK).replace("#", ""),
     });
   });
-  const legendRows = totalValues.filter((item) => Number(item.points || 0) > 0).slice(0, 5);
+  const legendRows = totalValues.filter((item) => Number(item.points || 0) > 0).slice(0, 8);
   if (legendRows.length > 0) {
+    addCard(totalSlide, 7.32, 5.54, 4.9, 1.24, { bg: "FFFFFF", border: CARD_BORDER, rounded: true });
     totalSlide.addText("Waffle legend", {
-      x: 7.4, y: 5.9, w: 2.3, h: 0.24,
-      fontSize: 11, bold: true, color: TEXT_BODY,
+      x: 7.5, y: 5.66, w: 2.3, h: 0.22,
+      fontSize: 10, bold: true, color: TEXT_BODY,
     });
     const totalLegendPoints = legendRows.reduce((sum, row) => sum + Number(row.points || 0), 0);
+    const maxRowsPerColumn = 4;
+    const legendColumnWidth = 2.16;
+    const legendColumnGap = 0.28;
     legendRows.forEach((row, idx) => {
-      const rowY = 6.16 + idx * 0.26;
+      const colIdx = Math.floor(idx / maxRowsPerColumn);
+      const rowIdx = idx % maxRowsPerColumn;
+      const rowX = 7.5 + colIdx * (legendColumnWidth + legendColumnGap);
+      const rowY = 5.93 + rowIdx * 0.2;
       const swatch = (colours?.[row.category] || BRAND_BLUE).replace("#", "");
       const pct = totalLegendPoints > 0 ? Math.round((Number(row.points || 0) / totalLegendPoints) * 100) : 0;
       totalSlide.addShape("roundRect", {
-        x: 7.4, y: rowY + 0.035, w: 0.11, h: 0.11,
+        x: rowX, y: rowY + 0.025, w: 0.11, h: 0.11,
         fill: { color: swatch }, line: { type: "none" },
       });
       totalSlide.addText(`${row.category} (${pct}%)`, {
-        x: 7.58, y: rowY, w: 4.5, h: 0.2,
-        fontSize: 10, color: TEXT_MUTED,
+        x: rowX + 0.18, y: rowY, w: legendColumnWidth - 0.2, h: 0.2,
+        fontSize: 9, color: TEXT_MUTED,
       });
     });
   }
