@@ -240,12 +240,69 @@ const normaliseAwardCategory = (value) => {
 
 const clamp01 = (value) => clamp(value, 0, 1);
 
-const getWeekProgress = (now = new Date()) => {
-  const day = now.getDay(); // Sunday = 0
-  const weekdayIndex = Math.max(0, Math.min(4, day - 1));
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const dayFraction = minutes / (24 * 60);
-  return (weekdayIndex + dayFraction) / 5;
+const getLondonDate = (source = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(source);
+  const part = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
+  return new Date(
+    Date.UTC(
+      part("year"),
+      part("month") - 1,
+      part("day"),
+      part("hour"),
+      part("minute"),
+      part("second")
+    )
+  );
+};
+
+const getWeekStart = (date) => {
+  const current = new Date(date);
+  const day = current.getUTCDay();
+  const diff = (day + 6) % 7;
+  const monday = new Date(
+    Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() - diff)
+  );
+  monday.setUTCHours(0, 0, 0, 0);
+  return monday;
+};
+
+const getEntryWeekStart = (date) => {
+  const current = new Date(date);
+  const monday = getWeekStart(current);
+  const fridayReopen = new Date(monday);
+  fridayReopen.setUTCDate(fridayReopen.getUTCDate() + 4);
+  fridayReopen.setUTCHours(15, 15, 0, 0);
+  if (current >= fridayReopen) {
+    const nextMonday = new Date(monday);
+    nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
+    return nextMonday;
+  }
+  return monday;
+};
+
+const getWeekFinishDeadline = (date) => {
+  const weekStart = getEntryWeekStart(date);
+  const friday = new Date(weekStart);
+  friday.setUTCDate(friday.getUTCDate() + 4);
+  friday.setUTCHours(14, 25, 0, 0);
+  return friday;
+};
+
+const getWeekProgress = (source = new Date()) => {
+  const now = getLondonDate(source);
+  const weekStart = getEntryWeekStart(now);
+  const elapsedMs = now - weekStart;
+  return clamp01(elapsedMs / WEEK_MS);
 };
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -279,8 +336,12 @@ function ProgressTrack({
   const TRACK_CENTER_Y = "50%";
   const clampedTime = clamp01(timeProgress);
 
-  const getWeekdayLabel = () =>
-    new Date().toLocaleDateString("en-GB", { weekday: "long" });
+  const getWeekdayLabel = () => {
+    const nowDate = getLondonDate(new Date(now));
+    const weekStart = getEntryWeekStart(nowDate);
+    const labelDate = nowDate < weekStart ? weekStart : nowDate;
+    return labelDate.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  };
 
   const getDateLabel = () => {
     const d = new Date();
@@ -327,13 +388,7 @@ function ProgressTrack({
 
   const getFinishDeadline = () => {
     if (timePillType === "weekday") {
-      const d = new Date();
-      const day = d.getUTCDay();
-      const diffToFriday = (5 - day + 7) % 7;
-      const friday = new Date(d);
-      friday.setUTCDate(d.getUTCDate() + diffToFriday);
-      friday.setUTCHours(14, 25, 0, 0);
-      return friday;
+      return getWeekFinishDeadline(new Date(now));
     }
 
     if (timePillType === "date" && termEndDate) {
